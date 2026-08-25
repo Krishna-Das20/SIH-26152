@@ -3,6 +3,8 @@ import { SocialPost, PlatformType } from '@/types/intelligence';
 import { analyzeSentimentAndEmotion } from '@/lib/nlp/emotionEngine';
 import { inferDemographics } from '@/lib/nlp/demographicProfiler';
 import { addPosts, getAllPosts } from '@/lib/store';
+import { enrichPosts } from '@/lib/ml/client';
+import { fetchTelegramPosts } from '@/lib/ingestion/telegram';
 import { getDatabase } from '@/lib/mongodb';
 
 /**
@@ -57,7 +59,7 @@ export async function POST(req: Request) {
               username: d.author,
               displayName: `u/${d.author}`,
               platform: 'reddit',
-              followerCount: Math.floor(d.score * 8 + Math.random() * 300),
+              followerCount: null, // Reddit exposes no follower count
               verified: d.distinguished === 'moderator',
               estimatedAgeBracket: demo.estimatedAgeBracket,
               inferredLocation: demo.inferredLocation,
@@ -106,7 +108,7 @@ export async function POST(req: Request) {
                 displayName: snip.authorDisplayName,
                 avatarUrl: snip.authorProfileImageUrl,
                 platform: 'youtube',
-                followerCount: Math.floor(Math.random() * 1500),
+                followerCount: null, // not exposed on comment threads
                 verified: false,
                 estimatedAgeBracket: demo.estimatedAgeBracket,
                 inferredLocation: demo.inferredLocation,
@@ -126,7 +128,31 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. Telegram or General Public Query
+    // 3. Telegram public channel
+    //
+    // Previously this branch was labelled "Telegram or General Public Query"
+    // and silently fell through to a Reddit search -- so a Telegram target
+    // returned Reddit posts. Telegram is a Must-Have platform in the problem
+    // statement; it now has a real ingester.
+    else if (
+      input.includes('t.me/') ||
+      input.includes('telegram.me/') ||
+      platform === 'telegram'
+    ) {
+      const channel = input.replace(/^@/, '');
+      const tg = await fetchTelegramPosts(channel, 25);
+      scrapedPosts.push(...tg.posts);
+
+      if (tg.posts.length === 0) {
+        return NextResponse.json({
+          success: false,
+          platform: 'telegram',
+          message: tg.note || `No public Telegram messages found for "${input}".`,
+        });
+      }
+    }
+
+    // 4. General keyword / handle query
     else {
       // General Keyword / Handle Analysis
       const query = input.replace(/^[@#]/, '');
@@ -154,7 +180,7 @@ export async function POST(req: Request) {
               username: d.author,
               displayName: `u/${d.author}`,
               platform: 'reddit',
-              followerCount: Math.floor(d.score * 10 + 100),
+              followerCount: null, // Reddit exposes no follower count
               verified: false,
               estimatedAgeBracket: demo.estimatedAgeBracket,
               inferredLocation: demo.inferredLocation,
@@ -175,21 +201,37 @@ export async function POST(req: Request) {
     }
 
     if (scrapedPosts.length === 0) {
+      const isReddit =
+        input.includes('reddit.com') || input.startsWith('r/') || platform === 'reddit';
+
       return NextResponse.json({
         success: false,
-        message: `No public live posts found for "${input}". Please check the URL or try a popular subreddit like r/technology or r/india.`,
+        message: isReddit
+          ? `No posts returned for "${input}". Reddit now blocks unauthenticated ` +
+            'access to its public JSON gateway (HTTP 403), so this path needs ' +
+            'REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET. Telegram works without any ' +
+            'credentials — try a public channel name instead.'
+          : `No public posts found for "${input}". Check the URL, or try a public ` +
+            'Telegram channel (works with no credentials).',
       });
     }
 
+    // Re-score with the transformer service where reachable; falls back to the
+    // lexicon engine per-item if it is not.
+    const analyzedPosts = await enrichPosts(scrapedPosts);
+    const usedMl = analyzedPosts.some((p) => p.sentiment.engine === 'ml');
+
     // Save to memory cache & MongoDB Atlas Data Lake
-    await addPosts(scrapedPosts);
+    await addPosts(analyzedPosts);
 
     return NextResponse.json({
       success: true,
-      scrapedCount: scrapedPosts.length,
+      scrapedCount: analyzedPosts.length,
       target: input,
-      posts: scrapedPosts.slice(0, 10),
+      posts: analyzedPosts.slice(0, 10),
       totalPostsStored: (await getAllPosts()).length,
+      // Reported so the operator can see which engine produced these numbers.
+      engine: usedMl ? 'ml' : 'lexicon',
     });
   } catch (error: any) {
     console.error('Target Scraper Error:', error);

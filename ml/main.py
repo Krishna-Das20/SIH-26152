@@ -38,8 +38,15 @@ from pipeline import NLPAnalysisPipeline
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+    # reconfigure() forces UTF-8: Windows consoles default to cp1252, and any
+    # non-latin-1 character in a log record otherwise raises inside the handler.
     handlers=[logging.StreamHandler(sys.stdout)],
 )
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except (AttributeError, ValueError):  # non-reconfigurable stream
+    pass
+
 logger = logging.getLogger("ml.main")
 
 # ── Pipeline singleton ────────────────────────────────────────────
@@ -49,12 +56,12 @@ pipeline = NLPAnalysisPipeline()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load all models once at startup."""
-    logger.info("🚀  NLP Pipeline starting — loading models …")
+    logger.info("NLP Pipeline starting - loading models ...")
     t0 = time.time()
     pipeline.load_models()
-    logger.info("✅  All models loaded in %.1f s", time.time() - t0)
+    logger.info("All models loaded in %.1f s", time.time() - t0)
     yield
-    logger.info("🛑  NLP Pipeline shutting down.")
+    logger.info("NLP Pipeline shutting down.")
 
 
 app = FastAPI(

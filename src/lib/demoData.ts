@@ -1,6 +1,23 @@
 import { SocialPost } from '@/types/intelligence';
 import { analyzeSentimentAndEmotion } from '@/lib/nlp/emotionEngine';
 
+/**
+ * Baseline simulation dataset. This is explicitly synthetic seed data used so
+ * the dashboard has something to render before any live ingestion has run --
+ * it is NOT analysis output, and the UI labels it as demo data.
+ *
+ * Values come from a deterministic hash rather than a random generator, so two
+ * runs of the same demo produce identical numbers. A demo whose KPI cards
+ * change on every refresh is not a demo anyone can rehearse.
+ */
+const DEMO_DATE = process.env.DEMO_DATE || '2026-08-25';
+
+/** Deterministic [0,1) value from an index and a salt. */
+function rand(index: number, salt: number): number {
+  const x = Math.sin(index * 127.1 + salt * 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+
 const RAW_MOCK_SEEDS = [
   // 1. Tech & AI Breakthrough Narrative (KOL Origin)
   {
@@ -254,9 +271,12 @@ export function generateFullIntelligenceDataset(): SocialPost[] {
   const platforms: SocialPost['platform'][] = ['x', 'telegram', 'reddit', 'youtube', 'instagram', 'facebook'];
 
   for (let i = 1; i <= 50; i++) {
-    const hour = Math.floor((i / 50) * 24);
-    const minute = Math.floor(Math.random() * 60);
-    const timeStr = `2026-08-25T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00.000Z`;
+    // `Math.floor((i / 50) * 24)` reached 24 at i=50, producing the invalid
+    // timestamp "T24:40:00Z". new Date() returns Invalid Date for that, so the
+    // post was silently dropped by every downstream timeline filter.
+    const hour = Math.min(23, Math.floor(((i - 1) / 50) * 24));
+    const minute = (i * 7) % 60; // deterministic, so demo runs are reproducible
+    const timeStr = `${DEMO_DATE}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00.000Z`;
     const chosenTopic = topics[i % topics.length];
     const city = cities[i % cities.length];
     const platform = platforms[i % platforms.length];
@@ -281,7 +301,7 @@ export function generateFullIntelligenceDataset(): SocialPost[] {
         displayName: `Intelligence Node #${i % 15}`,
         bio: `Specialized observer tracking ${chosenTopic} across decentralized media.`,
         platform,
-        followerCount: Math.floor(Math.random() * 35000 + 500),
+        followerCount: Math.floor(rand(i, 1) * 35000 + 500),
         verified: (i % 5 === 0),
         estimatedAgeBracket: i % 3 === 0 ? '18-24' : i % 2 === 0 ? '25-34' : '35-50',
         inferredLocation: city,
@@ -290,9 +310,9 @@ export function generateFullIntelligenceDataset(): SocialPost[] {
       },
       content,
       timestamp: timeStr,
-      likes: Math.floor(Math.random() * 1500 + 20),
-      shares: Math.floor(Math.random() * 250 + 5),
-      replies: Math.floor(Math.random() * 80 + 2),
+      likes: Math.floor(rand(i, 2) * 1500 + 20),
+      shares: Math.floor(rand(i, 3) * 250 + 5),
+      replies: Math.floor(rand(i, 4) * 80 + 2),
       inReplyToAuthorId: (i % 3 === 0) ? 'usr_ai_guru' : undefined,
       hashtags: [chosenTopic, '#Intel'] as string[],
       sentiment

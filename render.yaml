@@ -1,0 +1,19 @@
+# Render blueprint for the ML service.
+#
+# The Next.js dashboard stays on Vercel; only the Python transformer service
+# needs a persistent container. After deploying, set ML_API_URL in the Vercel
+# project to the URL Render assigns.
+services:
+  - type: web
+    name: sih26152-ml
+    runtime: docker
+    dockerfilePath: ./ml/Dockerfile
+    dockerContext: ./ml
+    # The models need roughly 2 GB resident; the free tier (512 MB) will OOM.
+    plan: standard
+    healthCheckPath: /health
+    envVars:
+      - key: CORS_ORIGINS
+        value: https://sih-26152.vercel.app,http://localhost:3000
+      - key: LOG_LEVEL
+        value: INFO

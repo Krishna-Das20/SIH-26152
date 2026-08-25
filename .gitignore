@@ -37,3 +37,16 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Python / ML service
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+ml/.env
+.pytest_cache/
+
+# HuggingFace model cache (multi-GB; never commit)
+.cache/
+models/

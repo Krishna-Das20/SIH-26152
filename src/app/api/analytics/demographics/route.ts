@@ -35,18 +35,31 @@ export async function GET(req: Request) {
   // 4. Interests
   const interestCounts: Record<string, number> = {};
 
+  // Coverage: how many authors we could actually infer each attribute for.
+  // Reported alongside the distributions so a reader can tell a real
+  // distribution from one built on three data points.
+  const coverage = { age: 0, location: 0, language: 0, interests: 0 };
+
   for (const author of authors) {
-    // Age
-    const age = author.estimatedAgeBracket || '25-34';
+    // Age. Unresolved authors are counted as Unknown rather than defaulted to
+    // '25-34' -- that default previously absorbed every author with no age
+    // signal and manufactured the shape of the age pyramid.
+    const age = author.estimatedAgeBracket ?? 'Unknown';
     ageCounts[age] = (ageCounts[age] || 0) + 1;
+    if (author.estimatedAgeBracket) coverage.age++;
 
     // Geo
-    const geo = author.inferredLocation || 'Unknown';
+    const geo = author.inferredLocation ?? 'Unknown';
     geoCounts[geo] = (geoCounts[geo] || 0) + 1;
+    if (author.inferredLocation) coverage.location++;
 
-    // Language
-    const lang = author.detectedLanguage || 'English';
+    // Language. Was defaulted to 'English', inflating the English share with
+    // every author whose language could not be determined.
+    const lang = author.detectedLanguage ?? 'Unknown';
     langCounts[lang] = (langCounts[lang] || 0) + 1;
+    if (author.detectedLanguage) coverage.language++;
+
+    if (author.interests && author.interests.length > 0) coverage.interests++;
 
     // Interests
     if (author.interests && Array.isArray(author.interests)) {
@@ -91,6 +104,15 @@ export async function GET(req: Request) {
     ageGroups,
     geographicDistribution,
     languages,
-    interestClusters
+    interestClusters,
+    // Share of sampled authors for whom each attribute could actually be
+    // inferred. Low coverage means the corresponding chart is built on a
+    // small subset and should be read as such.
+    coverage: {
+      age: Math.round((coverage.age / totalAuthors) * 100),
+      location: Math.round((coverage.location / totalAuthors) * 100),
+      language: Math.round((coverage.language / totalAuthors) * 100),
+      interests: Math.round((coverage.interests / totalAuthors) * 100),
+    },
   });
 }

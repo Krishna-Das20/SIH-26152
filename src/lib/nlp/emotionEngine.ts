@@ -131,10 +131,19 @@ export function analyzeSentimentAndEmotion(text: string): SentimentAnalysis {
   score = Math.min(Math.max(score, -1.0), 1.0);
 
   // 4. Stance Inference
+  //
+  // The explicit supportive/against lexicon signal is checked BEFORE the
+  // polarity fallback. The previous ordering let the `score < -0.2` clause in
+  // the opposing branch fire even when supportive markers clearly dominated,
+  // which collapsed the stance distribution to 0% supportive on the demo set.
   let stance: StanceType = 'neutral';
-  if (emotionScores.supportive > emotionScores.against && score > 0.15) {
+  if (emotionScores.supportive > emotionScores.against) {
     stance = 'supportive';
-  } else if (emotionScores.against > emotionScores.supportive || score < -0.2) {
+  } else if (emotionScores.against > emotionScores.supportive) {
+    stance = 'opposing';
+  } else if (score > 0.2) {
+    stance = 'supportive';
+  } else if (score < -0.2) {
     stance = 'opposing';
   }
 
@@ -150,7 +159,41 @@ export function analyzeSentimentAndEmotion(text: string): SentimentAnalysis {
     nuancedEmotion: dominantEmotion,
     sarcasmScore: Number(sarcasmScore.toFixed(2)),
     stance,
-    confidence: Number((0.75 + Math.random() * 0.2).toFixed(2)),
-    keywords
+    // Confidence reflects how much lexical evidence was actually found and how
+    // decisively the winning emotion beat the runner-up. It was previously
+    // `0.75 + Math.random() * 0.2` -- a random number shown to the analyst as
+    // a model confidence.
+    confidence: computeConfidence(emotionScores, dominantEmotion, maxScore),
+    keywords,
+    engine: 'lexicon'
   };
+}
+
+/**
+ * Lexicon confidence: the margin between the winning emotion and the next
+ * best, scaled by how much evidence was matched overall. A text that triggered
+ * no lexicon entries scores near zero, which is the truthful answer -- this
+ * engine knows nothing about it.
+ */
+function computeConfidence(
+  scores: Record<EmotionType, number>,
+  winner: EmotionType,
+  winnerScore: number
+): number {
+  const values = Object.entries(scores)
+    .filter(([emotion]) => emotion !== winner)
+    .map(([, value]) => value);
+
+  const runnerUp = values.length > 0 ? Math.max(...values) : 0;
+  const total = Object.values(scores).reduce((a, b) => a + b, 0);
+
+  if (total <= 0.1) return 0.1; // nothing matched beyond the neutral prior
+
+  // Margin over the runner-up, normalised by the winner's own score.
+  const margin = winnerScore > 0 ? (winnerScore - runnerUp) / winnerScore : 0;
+  // Evidence: saturates once roughly four lexicon hits have accumulated.
+  const evidence = Math.min(total / 6, 1);
+
+  const confidence = 0.25 + 0.45 * margin + 0.3 * evidence;
+  return Number(Math.min(Math.max(confidence, 0.1), 0.95).toFixed(2));
 }

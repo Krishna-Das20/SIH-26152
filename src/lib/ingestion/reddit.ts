@@ -1,5 +1,6 @@
 import { SocialPost } from '@/types/intelligence';
 import { analyzeSentimentAndEmotion } from '@/lib/nlp/emotionEngine';
+import { enrichPosts } from '@/lib/ml/client';
 import { inferDemographics } from '@/lib/nlp/demographicProfiler';
 
 interface RedditPostItem {
@@ -31,14 +32,27 @@ export async function fetchLiveRedditPosts(subreddit: string = 'india', limit: n
     });
 
     if (!response.ok) {
-      console.warn(`Reddit fetch responded with status: ${response.status}`);
+      // As of 2026-08 Reddit blocks unauthenticated access to the public .json
+      // gateway: it returns 403, and old.reddit.com redirects to a login page.
+      // The "zero API key needed" path this module was built on no longer
+      // works from most networks. Surface that clearly instead of returning an
+      // empty array that looks like "this subreddit had no posts".
+      if (response.status === 403 || response.status === 429) {
+        console.warn(
+          `Reddit returned ${response.status} for r/${subreddit}. The public JSON ` +
+            'gateway now requires authentication. Set REDDIT_CLIENT_ID and ' +
+            'REDDIT_CLIENT_SECRET and use the OAuth API, or ingest from Telegram instead.'
+        );
+      } else {
+        console.warn(`Reddit fetch responded with status: ${response.status}`);
+      }
       return [];
     }
 
     const json = await response.json();
     const children: RedditPostItem[] = json?.data?.children || [];
 
-    return children.map((item) => {
+    const posts: SocialPost[] = children.map((item) => {
       const p = item.data;
       const text = `${p.title} ${p.selftext || ''}`.trim();
       const sentiment = analyzeSentimentAndEmotion(text);
@@ -52,7 +66,10 @@ export async function fetchLiveRedditPosts(subreddit: string = 'india', limit: n
           username: p.author,
           displayName: `u/${p.author}`,
           platform: 'reddit',
-          followerCount: Math.floor(p.score * 12 + Math.random() * 500),
+          // Reddit does not expose follower counts. Previously this was
+          // `score * 12 + Math.random() * 500`, an invented number that then
+          // fed the KOL influence ranking. Null means "not available".
+          followerCount: null,
           verified: false,
           estimatedAgeBracket: demo.estimatedAgeBracket,
           inferredLocation: demo.inferredLocation,
@@ -69,6 +86,11 @@ export async function fetchLiveRedditPosts(subreddit: string = 'india', limit: n
         sentiment
       };
     });
+
+    // Re-score with the transformer service where it is reachable. The lexicon
+    // result computed above stays as the fallback, so ingestion never blocks on
+    // the ML box being up.
+    return await enrichPosts(posts);
   } catch (err) {
     console.error('Error fetching live Reddit posts:', err);
     return [];

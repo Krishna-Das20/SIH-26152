@@ -1,7 +1,10 @@
 export interface DemographicInference {
-  estimatedAgeBracket: '<18' | '18-24' | '25-34' | '35-50' | '50+';
-  inferredLocation: string;
-  detectedLanguage: string;
+  /** null when no age signal was found. Render as "Unknown", never guess. */
+  estimatedAgeBracket: '<18' | '18-24' | '25-34' | '35-50' | '50+' | null;
+  /** null when no location entity was found in the text or profile. */
+  inferredLocation: string | null;
+  /** null when the text is too short or ambiguous to classify. */
+  detectedLanguage: string | null;
   interests: string[];
 }
 
@@ -44,7 +47,11 @@ export function inferDemographics(
   const combined = `${bio} ${postsText}`.toLowerCase();
 
   // 1. Inferred Location
-  let inferredLocation = locationHint || '';
+  // Only ever reports a location actually named in the text or supplied by
+  // the platform. The previous implementation randomly sampled a city whenever
+  // no match was found, which meant the entire geographic distribution chart
+  // was fabricated for the overwhelming majority of posts.
+  let inferredLocation: string | null = locationHint || null;
   if (!inferredLocation) {
     for (const reg of [...INDIAN_REGIONS, ...GLOBAL_REGIONS]) {
       const city = reg.split(',')[0].toLowerCase();
@@ -54,16 +61,12 @@ export function inferDemographics(
       }
     }
   }
-  if (!inferredLocation) {
-    // Probabilistic sample prioritizing Indian demographics
-    const rand = Math.random();
-    inferredLocation = rand > 0.35 
-      ? INDIAN_REGIONS[Math.floor(Math.random() * INDIAN_REGIONS.length)]
-      : GLOBAL_REGIONS[Math.floor(Math.random() * GLOBAL_REGIONS.length)];
-  }
+
 
   // 2. Language Detection
-  let detectedLanguage = 'English';
+  // Scripts are unambiguous; Latin-script text is only called English when
+  // there is enough of it to be worth asserting.
+  let detectedLanguage: string | null = null;
   if (/[\u0900-\u097F]/.test(combined)) {
     detectedLanguage = 'Hindi (Devanagari)';
   } else if (/[\u0980-\u09FF]/.test(combined)) {
@@ -74,25 +77,38 @@ export function inferDemographics(
     detectedLanguage = 'Telugu';
   } else if (/\b(bhai|kya|kyun|yaar|nahi|hain|accha|sahi|matlab|dekho|sab|desh)\b/i.test(combined)) {
     detectedLanguage = 'Hinglish (Code-Mixed)';
+  } else if (combined.trim().split(/\s+/).length >= 4) {
+    detectedLanguage = 'English';
   }
 
   // 3. Age Bracket Inference
-  const ageScores = { '<18': 0, '18-24': 1, '25-34': 2, '35-50': 0.5, '50+': 0.2 };
+  // Starts from an all-zero prior. The previous version seeded 18-24 at 1 and
+  // 25-34 at 2, so every text with no age signal whatsoever was confidently
+  // labelled 25-34 -- which is what produced the suspiciously smooth age
+  // pyramid. With no matches the bracket is now null.
+  const ageScores: Record<string, number> = {
+    '<18': 0, '18-24': 0, '25-34': 0, '35-50': 0, '50+': 0,
+  };
+  let ageEvidence = 0;
   
   for (const [bracket, slangs] of Object.entries(AGE_SLANG_MAP)) {
     for (const slang of slangs) {
       if (combined.includes(slang)) {
-        ageScores[bracket as keyof typeof ageScores] += 2.5;
+        ageScores[bracket] += 1;
+        ageEvidence += 1;
       }
     }
   }
 
-  let estimatedAgeBracket: '<18' | '18-24' | '25-34' | '35-50' | '50+' = '25-34';
-  let maxAgeScore = -1;
-  for (const [bracket, score] of Object.entries(ageScores)) {
-    if (score > maxAgeScore) {
-      maxAgeScore = score;
-      estimatedAgeBracket = bracket as any;
+  type AgeBracket = '<18' | '18-24' | '25-34' | '35-50' | '50+';
+  let estimatedAgeBracket: AgeBracket | null = null;
+  if (ageEvidence > 0) {
+    let maxAgeScore = 0;
+    for (const [bracket, score] of Object.entries(ageScores)) {
+      if (score > maxAgeScore) {
+        maxAgeScore = score;
+        estimatedAgeBracket = bracket as AgeBracket;
+      }
     }
   }
 
@@ -108,9 +124,9 @@ export function inferDemographics(
       }
     }
   }
-  if (detectedInterests.length === 0) {
-    detectedInterests.push('Tech & AI', 'Policy & Governance');
-  }
+  // No default interests: an empty list means nothing matched, which is the
+  // truthful result. Previously every unmatched author was tagged
+  // "Tech & AI, Policy & Governance", inflating both categories.
 
   return {
     estimatedAgeBracket,

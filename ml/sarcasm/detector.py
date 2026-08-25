@@ -38,6 +38,7 @@ class SarcasmDetector:
         self._tokenizer = None
         self._loaded = False
         self._available = False
+        self._sarcastic_index = 1
 
     def load(self) -> None:
         if self._loaded:
@@ -48,6 +49,22 @@ class SarcasmDetector:
             self._model = AutoModelForSequenceClassification.from_pretrained(self.model_name)
             self._model.to(self.device)
             self._model.eval()
+
+            # Resolve which output index means "sarcastic" from the model's own
+            # config rather than assuming index 1. Swapping SARCASM_MODEL for a
+            # checkpoint with the opposite label order would otherwise invert
+            # every prediction silently.
+            id2label = getattr(self._model.config, "id2label", {}) or {}
+            self._sarcastic_index = 1
+            for idx, label in id2label.items():
+                if any(tag in str(label).lower() for tag in ("sarcasm_more", "sarcastic", "label_1")):
+                    if "less" not in str(label).lower() and "not" not in str(label).lower():
+                        self._sarcastic_index = int(idx)
+                        break
+            logger.info(
+                "Sarcasm labels %s -> sarcastic index %d", id2label, self._sarcastic_index
+            )
+
             self._available = True
             logger.info("Sarcasm model loaded.")
         except Exception as exc:
@@ -96,8 +113,8 @@ class SarcasmDetector:
 
         results: list[SarcasmScore] = []
         for i, prob in enumerate(probs):
-            # Model typically has 2 labels: 0=not sarcastic, 1=sarcastic
-            sarcasm_prob = float(prob[1]) if len(prob) > 1 else float(prob[0])
+            idx = self._sarcastic_index if self._sarcastic_index < len(prob) else len(prob) - 1
+            sarcasm_prob = float(prob[idx])
 
             if not texts[i] or not texts[i].strip():
                 results.append(SarcasmScore(is_sarcastic=False, confidence=0.0, model_available=True))

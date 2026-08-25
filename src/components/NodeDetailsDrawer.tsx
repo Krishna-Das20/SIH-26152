@@ -64,7 +64,7 @@ export const NodeDetailsDrawer: React.FC<NodeDetailsDrawerProps> = ({ node, onCl
           </div>
           <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800">
             <span className="text-[10px] text-slate-400 block">Follower Reach</span>
-            <span className="text-xl font-bold text-cyan-400">{node.followerCount.toLocaleString()}</span>
+            <span className="text-xl font-bold text-cyan-400">{node.followerCount === null ? 'n/a' : node.followerCount.toLocaleString()}</span>
           </div>
           <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800">
             <span className="text-[10px] text-slate-400 block">PageRank Vector</span>

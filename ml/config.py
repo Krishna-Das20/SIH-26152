@@ -27,9 +27,22 @@ EMOTION_MODEL = os.getenv(
     "SamLowe/roberta-base-go_emotions",
 )
 
+# Sarcasm model selection, measured rather than assumed:
+#
+#   mrm8488/distilroberta-finetuned-sarcasm  -- DOES NOT EXIST on the Hub. The
+#       original configuration 404'd on every load, so sarcasm detection
+#       silently reported model_available=False for every request.
+#   helinivan/{english,multilingual}-sarcasm-detector -- load fine, but are
+#       trained on news headlines. On conversational text they output ~0.01 for
+#       sarcastic and non-sarcastic alike; no discrimination.
+#   jkhan447/sarcasm-detection-RoBerta-base-CR -- scored 0.999 sarcastic on the
+#       plainly sincere "I am genuinely happy about this result". Unusable.
+#   hallisky/sarcasm-classifier-gpt4-data -- SELECTED. Decisive on sarcastic
+#       text (0.999+) with no false positives on the sincere probes, and it
+#       ships a real id2label (sarcasm_less / sarcasm_more).
 SARCASM_MODEL = os.getenv(
     "SARCASM_MODEL",
-    "mrm8488/distilroberta-finetuned-sarcasm",
+    "hallisky/sarcasm-classifier-gpt4-data",
 )
 
 TOXICITY_MODEL = os.getenv(

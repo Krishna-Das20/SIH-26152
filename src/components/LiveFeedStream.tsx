@@ -6,12 +6,15 @@ import { Radio, MessageSquare, Heart, Repeat2, ExternalLink, ShieldCheck, Flame,
 
 interface LiveFeedStreamProps {
   posts: SocialPost[];
+  /** Counts of posts scored by the transformer service vs the lexicon fallback. */
+  engineBreakdown?: { ml: number; lexicon: number };
   onManualPostSubmit: (text: string, platform: PlatformType) => Promise<void>;
   isLoading: boolean;
 }
 
 export const LiveFeedStream: React.FC<LiveFeedStreamProps> = ({
   posts,
+  engineBreakdown,
   onManualPostSubmit,
   isLoading
 }) => {

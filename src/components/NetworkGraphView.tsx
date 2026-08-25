@@ -380,7 +380,7 @@ export const NetworkGraphView: React.FC<NetworkGraphViewProps> = ({
             </div>
             <div className="text-slate-400 text-[11px] mt-0.5">{hoveredNode.label}</div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-[10px] border-t border-slate-800 pt-1.5">
-              <div>Reach: <span className="text-cyan-400">{hoveredNode.followerCount.toLocaleString()}</span></div>
+              <div>Reach: <span className="text-cyan-400">{hoveredNode.followerCount === null ? 'n/a' : hoveredNode.followerCount.toLocaleString()}</span></div>
               <div>Influence: <span className="text-purple-400">{hoveredNode.centralityScore}/100</span></div>
               <div>Location: <span className="text-white">{hoveredNode.inferredLocation}</span></div>
               <div>Sentiment: <span className={hoveredNode.dominantSentiment === 'positive' ? 'text-emerald-400' : 'text-rose-400'}>{hoveredNode.dominantSentiment}</span></div>

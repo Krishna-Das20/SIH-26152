@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "verify:graph": "tsx src/lib/graph/__tests__/verify.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.11.3",

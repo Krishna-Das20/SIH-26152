@@ -4,6 +4,30 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { getDatabase } from '@/lib/mongodb';
 
+/**
+ * A valid bcrypt hash of a value no user can supply. Compared against when an
+ * account is not found, so lookup failures and wrong passwords take the same
+ * amount of time (prevents user enumeration by timing).
+ */
+const DUMMY_PASSWORD_HASH =
+  '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
+
+/**
+ * NEXTAUTH_SECRET signs every session JWT. A committed fallback value means
+ * anyone reading the repository can forge a valid session, so this refuses to
+ * start without one rather than silently using a public constant.
+ */
+function requireSecret(): string {
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      'NEXTAUTH_SECRET is missing or too short (needs >= 32 chars). ' +
+        'Generate one with:  openssl rand -base64 32'
+    );
+  }
+  return secret;
+}
+
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: 'jwt',
@@ -28,38 +52,33 @@ export const authOptions: NextAuthOptions = {
         const email = credentials.email.toLowerCase().trim();
         const db = await getDatabase();
 
-        if (db) {
-          // MongoDB Atlas lookup
-          const user = await db.collection('users').findOne({ email });
-          if (!user || !user.passwordHash) {
-            throw new Error('No account found with this email address.');
-          }
-
-          const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
-          if (!isValid) {
-            throw new Error('Incorrect password. Please try again.');
-          }
-
-          return {
-            id: user._id.toString(),
-            name: user.name || email.split('@')[0],
-            email: user.email,
-            image: user.image || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.email}`,
-            role: user.role || 'analyst',
-          };
-        } else {
-          // In-memory fallback if MongoDB Atlas is momentarily disconnecting
-          if (credentials.password.length >= 6) {
-            return {
-              id: 'usr_local_demo',
-              name: email.split('@')[0],
-              email: email,
-              image: `https://api.dicebear.com/7.x/bottts/svg?seed=${email}`,
-              role: 'analyst',
-            };
-          }
-          throw new Error('Invalid credentials.');
+        // FAIL CLOSED. There is deliberately no offline fallback here: the
+        // previous behaviour accepted any email with any 6-character password
+        // whenever Atlas was unreachable, which is a full authentication
+        // bypass triggerable by causing a database outage.
+        if (!db) {
+          console.error('Auth attempt refused: user database unreachable.');
+          throw new Error('Authentication service is temporarily unavailable. Please try again shortly.');
         }
+
+        const user = await db.collection('users').findOne({ email });
+
+        // Compare against a dummy hash when the user is absent so that the
+        // response time does not reveal whether an account exists.
+        const hash = user?.passwordHash ?? DUMMY_PASSWORD_HASH;
+        const isValid = await bcrypt.compare(credentials.password, hash);
+
+        if (!user?.passwordHash || !isValid) {
+          throw new Error('Invalid email or password.');
+        }
+
+        return {
+          id: user._id.toString(),
+          name: user.name || email.split('@')[0],
+          email: user.email,
+          image: user.image || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.email}`,
+          role: user.role || 'analyst',
+        };
       },
     }),
   ],
@@ -107,5 +126,5 @@ export const authOptions: NextAuthOptions = {
       return true;
     },
   },
-  secret: process.env.NEXTAUTH_SECRET || 'sih26152_super_secret_session_key_2026',
+  secret: requireSecret(),
 };

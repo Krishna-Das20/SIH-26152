@@ -57,6 +57,8 @@ export default function Dashboard() {
   });
 
   const [trends, setTrends] = useState([]);
+  const [feedPosts, setFeedPosts] = useState<SocialPost[]>([]);
+  const [engineBreakdown, setEngineBreakdown] = useState({ ml: 0, lexicon: 0 });
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
 
   // Fetch Analytics across all endpoints
@@ -66,12 +68,13 @@ export default function Dashboard() {
       const t = timeCutoff || currentTime;
       const query = `?cutoffTime=${encodeURIComponent(t)}&platform=${p}`;
 
-      const [overviewRes, graphRes, sentimentRes, demoRes, trendsRes] = await Promise.all([
+      const [overviewRes, graphRes, sentimentRes, demoRes, trendsRes, postsRes] = await Promise.all([
         fetch(`/api/analytics/overview${query}`).then(r => r.json()),
         fetch(`/api/analytics/graph${query}`).then(r => r.json()),
         fetch(`/api/analytics/sentiment${query}`).then(r => r.json()),
         fetch(`/api/analytics/demographics${query}`).then(r => r.json()),
-        fetch(`/api/analytics/trends${query}`).then(r => r.json())
+        fetch(`/api/analytics/trends${query}`).then(r => r.json()),
+        fetch(`/api/posts${query}&limit=100`).then(r => r.json())
       ]);
 
       if (overviewRes && !overviewRes.error) {
@@ -85,6 +88,10 @@ export default function Dashboard() {
       }
       if (demoRes && !demoRes.error) {
         setDemographicData(demoRes);
+      }
+      if (postsRes?.posts) {
+        setFeedPosts(postsRes.posts);
+        setEngineBreakdown(postsRes.engineBreakdown || { ml: 0, lexicon: 0 });
       }
       if (trendsRes?.trends) {
         setTrends(trendsRes.trends);
@@ -240,37 +247,8 @@ export default function Dashboard() {
 
         {/* 9. Component A: Multi-Platform Ingestion Feed & Custom Injection */}
         <LiveFeedStream
-          posts={topology.nodes.map((n, idx) => ({
-            id: `post_${n.id}_${idx}`,
-            platform: n.platform,
-            author: {
-              id: n.id,
-              username: n.username,
-              displayName: n.label,
-              platform: n.platform,
-              followerCount: n.followerCount,
-              verified: n.isKOL,
-              estimatedAgeBracket: n.ageBracket as any,
-              inferredLocation: n.inferredLocation,
-              detectedLanguage: 'English',
-              interests: ['Tech & AI']
-            },
-            content: `Live OSINT node profile for @${n.username} in community #${n.communityId}. Reach: ${n.followerCount.toLocaleString()} users.`,
-            timestamp: currentTime,
-            likes: Math.floor(n.followerCount * 0.05),
-            shares: Math.floor(n.followerCount * 0.01),
-            replies: Math.floor(n.followerCount * 0.005),
-            hashtags: ['#LiveIntel', '#SIH2026'],
-            sentiment: {
-              score: n.dominantSentiment === 'positive' ? 0.75 : n.dominantSentiment === 'negative' ? -0.65 : 0.1,
-              label: n.dominantSentiment,
-              nuancedEmotion: n.dominantEmotion,
-              sarcasmScore: n.dominantSentiment === 'negative' ? 0.65 : 0.08,
-              stance: n.dominantSentiment === 'positive' ? 'supportive' : 'opposing',
-              confidence: 0.92,
-              keywords: ['live', 'intel']
-            }
-          }))}
+          posts={feedPosts}
+          engineBreakdown={engineBreakdown}
           onManualPostSubmit={handleManualPostSubmit}
           isLoading={isLoading}
         />

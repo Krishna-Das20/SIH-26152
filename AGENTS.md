@@ -1,225 +1,281 @@
 # AGENTS.md — AI Agent Context & Engineering Blueprint
 
-> **Notice for Collaborating AI Agents (Cursor, Claude, Copilot, Antigravity, Devin, etc.):**  
-> This document provides the complete architectural ground-truth, design decisions, database schemas, active endpoints, and ongoing roadmap for **SIH26-26152**. Read this file first before making changes or writing new modules.
+> **Notice for collaborating AI agents (Cursor, Claude, Copilot, Devin, etc.):**
+> This document is the architectural ground truth for **SIH26-26152**. Read it
+> before changing anything.
+>
+> **It documents what the code actually does, not what it aspires to do.**
+> Anything not yet implemented is listed in §9 as a known gap. If you implement
+> something from §9, move it up into the relevant section in the same commit.
+> Do not describe an algorithm here that the code does not perform.
 
 ---
 
-## 1. Project Identity & Problem Statement Context
+## 1. Problem statement
 
-* **Hackathon:** Smart India Hackathon (SIH) 2026 — Software Edition
-* **Problem Statement ID:** `SIH26-26152`
-* **Problem Title:** AI-Driven Social Media Analytics Framework
-* **Sponsoring Agency:** **National Technical Research Organisation (NTRO)** *(Premier technical intelligence agency under National Security Advisor, PMO)*
-* **Domain / Theme:** Smart Automation / Security & Intelligence / OSINT & Graph Topology
-* **Core Objective:** Design a multi-platform audience intelligence system combining 5 vectors:
-  1. **Continuous Data Collection & Timeline Management** (X, Telegram, Reddit, YouTube, Instagram, Facebook)
-  2. **Multi-Dimensional Sentiment Inference** (Nuanced emotions, Sarcasm detection, Stance classification)
-  3. **Automated Demographic Profiling** (Inferred age brackets, Geographic distribution, Language, Interests)
-  4. **Real-Time Trend & Topic Detection** ($Z$-score spike scoring, viral keyword momentum)
-  5. **Link Analysis & Network Topology** (PageRank, Betweenness Centrality, Louvain Community Detection, Key Opinion Leaders)
+* **Hackathon:** Smart India Hackathon 2026 — Software Edition
+* **Problem Statement ID:** `SIH26152`
+* **Title:** Social Media Analytics
+* **Organisation:** National Technical Research Organisation (NTRO)
+* **Category / Theme:** Software / Miscellaneous
+* **Submission deadline:** 20 September 2026
 
----
+### Expected solution — the five components, verbatim in intent
 
-## 2. Live Environments & Deployment Links
+**A. Continuous Data Collection & Timeline Management.** Multi-platform
+ingestion with a time-stamped historical database. The problem statement ranks
+the platforms explicitly, and this ranking drives our priorities:
 
-| Resource | URI / Location | Status |
+| Tier | Platforms | Our status |
 | :--- | :--- | :--- |
-| **Live Vercel Production URL** | `https://sih-26152.vercel.app/` | 🟢 Live & Active |
-| **Authentication Page** | `https://sih-26152.vercel.app/auth/signin` | 🟢 Live |
-| **GitHub Repository** | `https://github.com/Krishna-Das20/SIH-26152` | 🟢 Main Branch |
-| **MongoDB Atlas Cluster** | `cluster0.nkfwjel.mongodb.net` (DB: `sih26152`) | 🟢 Connected |
-| **Vercel Project Dashboard** | `https://vercel.com/krishna-das20s-projects/sih-26152` | 🟢 Synced |
+| **Essentials (Must-Have)** | **X (Twitter)**, **Telegram** | Telegram ✅ live · X ❌ **not implemented** |
+| Desirable (Good-to-Have) | Instagram, Facebook | ❌ not implemented |
+| Appreciable Additions | Reddit, YouTube | Reddit ✅ live · YouTube ✅ (needs API key) |
+
+**B. Multi-Dimensional Sentiment Inference.** NLP for nuanced emotions
+(sarcasm, anxiety, excitement, supportive, against), tracked along the timeline.
+
+**C. Automated Demographic Profiling.** Aggregate, anonymised inference of age
+brackets, geography, language, and professional interests.
+
+**D. Real-Time Trend & Topic Detection.** Identify and rank rising trends and
+viral keywords chronologically.
+
+**E. Link Analysis & Network Topology.** Map follower relationships, identify
+key opinion leaders, visualise how sentiment spreads between segments.
 
 ---
 
-## 3. Technology Stack & Framework Choices
+## 2. Architecture
 
-* **Fullstack Framework:** **Next.js 14** (App Router, Serverless Edge-Optimized for Vercel)
-* **Language:** **TypeScript** (Strict Mode, 100% Type-Safe)
-* **Styling & UI:** **Tailwind CSS**, Lucide React, Glassmorphism Cyber-Intel Design System
-* **Data Visualization:**
-  * **Network Topology Graph:** Interactive HTML5 Canvas + `d3-force` physics engine (supports dragging, canvas pan, wheel zoom, Louvain community color schemes, and isolated pill labels).
-  * **Charts:** `recharts` (Radar for 7-vector emotions, Area chart for temporal sarcasm flow, Donut for stance orientation).
-* **Authentication:** **NextAuth.js (v4)** with Google OAuth 2.0 Provider and Credentials Provider (`bcryptjs` password hashing).
-* **Database / Data Lake:** **MongoDB Atlas** via official `mongodb` client with connection pooling and in-memory serverless cache fallback.
+Two deployable units. This split is forced by the models: the transformer stack
+holds ~2 GB of weights resident, which a serverless function cannot do.
+
+```
+┌────────────────────────────┐        ┌──────────────────────────────┐
+│  Next.js 14 dashboard      │  HTTP  │  Python ML service (ml/)     │
+│  (Vercel, serverless)      │ ─────► │  FastAPI + transformers      │
+│                            │        │  MUST run on a real container│
+│  ingestion, graph, UI      │ ◄───── │  sentiment/emotion/sarcasm/  │
+│  MongoDB persistence       │        │  toxicity/topics/embeddings  │
+└────────────────────────────┘        └──────────────────────────────┘
+         │                                        ▲
+         │ falls back to lexicon engine ──────────┘
+         │ when the ML service is unreachable
+```
+
+`src/lib/ml/client.ts` is the only bridge. Every call degrades to the local
+lexicon engine on timeout or error, and stamps `sentiment.engine` as `'ml'` or
+`'lexicon'` so the UI can state which produced a given number.
+
+### Stack
+
+* **Frontend:** Next.js 14 App Router, TypeScript strict, Tailwind
+* **Charts:** `recharts`; network graph is hand-rolled HTML5 Canvas + `d3-force`
+* **Auth:** NextAuth v4 (Google OAuth + bcrypt credentials)
+* **Database:** MongoDB Atlas, pooled client cached on `globalThis`
+* **ML:** PyTorch (CPU), HuggingFace transformers, BERTopic, KeyBERT
 
 ---
 
-## 4. Directory & Codebase Map
+## 3. Live environments
+
+| Resource | URI | Status |
+| :--- | :--- | :--- |
+| Vercel production | `https://sih-26152.vercel.app/` | 🟢 live |
+| GitHub | `https://github.com/Krishna-Das20/SIH-26152` | 🟢 main |
+| MongoDB Atlas | `cluster0.nkfwjel.mongodb.net` | 🟢 connected |
+| ML service | not yet deployed | 🔴 **local only** |
+
+`ML_API_URL` must point at a deployed ML service before production uses
+transformer output. Until then production silently runs on the lexicon
+fallback — which works, but is not what the demo should claim.
+
+---
+
+## 4. Codebase map
 
 ```
 SIH 26152/
-├── .env.example                       // Template environment variables
-├── .gitignore                         // Strictly excludes .env and build output
-├── package.json                       // Dependencies (Next.js, D3-Force, Recharts, NextAuth, MongoDB)
-├── tsconfig.json                      // Path alias configuration (@/* -> ./src/*)
-├── tailwind.config.ts                 // Intel custom color palette (cyan, emerald, amber, rose, purple)
-├── next.config.mjs                    // Production Next.js config
-├── README.md                          // Human-readable project overview
-├── AGENTS.md                          // THIS FILE (AI Agent Context)
-│
-└── src/
-    ├── types/
-    │   ├── intelligence.ts            // Core types (SocialPost, GraphNode, GraphLink, NetworkTopology, EmotionMetrics)
-    │   └── auth.ts                    // NextAuth UserAccount and Session types
-    │
-    ├── lib/
-    │   ├── mongodb.ts                 // Cached MongoDB Atlas MongoClient connection pool
-    │   ├── auth.ts                    // NextAuth configuration (Google OAuth + Credentials + Atlas lookup)
-    │   ├── store.ts                   // Unified data store (Memory cache + MongoDB persistence)
-    │   ├── demoData.ts                // Baseline simulation dataset with 60+ chronological events
-    │   ├── ingestion/
-    │   │   ├── reddit.ts              // Live Reddit public JSON stream scraper (Zero API key needed)
-    │   │   └── youtube.ts             // Google Cloud YouTube Data API v3 comment scraper
-    │   ├── nlp/
-    │   │   ├── emotionEngine.ts       // 7-vector Nuanced Emotion taxonomy, Sarcasm detector & Stance
-    │   │   └── demographicProfiler.ts // SpaCy/Regex Age, Geography, Language & Interest extractor
-    │   └── graph/
-    │       └── networkAnalyzer.ts     // PageRank, Centrality, Louvain Communities & Diffusion simulation
-    │
-    ├── components/
-    │   ├── Navbar.tsx                 // Header with NTRO badge, platform tabs, user session avatar, sign in/out
-    │   ├── OverviewMetrics.tsx        // 6 Top-Level KPI cards (Posts, Nodes, Sentiment, Sarcasm, Stance, Threat)
-    │   ├── PageAnalyzerInput.tsx      // Real Target Page & Subreddit OSINT Scraper (Zero Dummy Data)
-    │   ├── TimelineScrubber.tsx       // Interactive Chronological Time Player (T0 -> Tn with 1x, 2x, 5x)
-    │   ├── NetworkGraphView.tsx       // D3-Force Canvas graph (Drag nodes, zoom, pan, community colors)
-    │   ├── SentimentEmotionView.tsx   // Emotion Radar, Sarcasm Flow area chart, Stance balance
-    │   ├── DemographicRadarView.tsx   // Age pyramid, Geo distribution, Language & Domain affinities
-    │   ├── TrendTopicDetector.tsx     // Viral topic cards with Z-score spike indicators
-    │   ├── LiveFeedStream.tsx         // Filterable raw post stream + manual test post injection
-    │   └── NodeDetailsDrawer.tsx      // Slide-over Node Dossier inspection drawer
-    │
-    └── app/
-        ├── layout.tsx                 // RootLayout wrapped with <Providers> (SessionProvider)
-        ├── page.tsx                   // Main Intelligence Command Center connecting all components
-        ├── providers.tsx              // Client SessionProvider wrapper
-        ├── globals.css                // Cyber-intelligence dark mode styles and custom scrollbars
-        │
-        ├── auth/
-        │   └── signin/page.tsx        // Login & Registration screen (Google 1-click + Email credentials)
-        │
-        └── api/
-            ├── auth/
-            │   ├── [...nextauth]/route.ts  // NextAuth authentication handler
-            │   └── register/route.ts       // Email/password user signup with bcrypt hash in Atlas
-            ├── ingest/route.ts             // Ingestion trigger & manual post injection
-            ├── analyze/page/route.ts       // Real page scraper (Reddit/YouTube/Telegram/Twitter)
-            └── analytics/
-                ├── overview/route.ts       // Overview KPIs & threat volatility scoring
-                ├── sentiment/route.ts      // Nuanced emotion radar & sarcasm temporal curves
-                ├── demographics/route.ts   // Age, Geo, Language, and Interest aggregations
-                ├── trends/route.ts         // Real-time trending keywords & spike detection
-                └── graph/route.ts          // Network topology nodes, links, communities & KOLs
+├── render.yaml                        # Render blueprint for the ML service
+├── src/
+│   ├── types/intelligence.ts          # Core types. Fields that may be unknowable
+│   │                                  #   (followerCount, location, age, language)
+│   │                                  #   are `| null` BY DESIGN — see §5.
+│   ├── lib/
+│   │   ├── mongodb.ts                 # Pooled client cached on globalThis
+│   │   ├── auth.ts                    # NextAuth; FAILS CLOSED when DB is down
+│   │   ├── store.ts                   # Memory cache + Atlas persistence
+│   │   ├── demoData.ts                # Synthetic seed data (deterministic)
+│   │   ├── ml/client.ts               # ★ Bridge to the Python service
+│   │   ├── ingestion/
+│   │   │   ├── reddit.ts              # Public JSON, no key needed
+│   │   │   ├── youtube.ts             # Data API v3, needs YOUTUBE_API_KEY
+│   │   │   └── telegram.ts            # t.me web preview + Bot API
+│   │   ├── nlp/
+│   │   │   ├── emotionEngine.ts       # Lexicon FALLBACK only
+│   │   │   └── demographicProfiler.ts # Regex; returns null when unknown
+│   │   └── graph/
+│   │       ├── networkAnalyzer.ts     # Orchestrates the graph build
+│   │       ├── louvain.ts             # ★ Real Louvain (Blondel et al. 2008)
+│   │       └── betweenness.ts         # ★ Real Brandes betweenness (2001)
+│   ├── components/                    # Dashboard views
+│   └── app/api/
+│       ├── posts/route.ts             # Real ingested posts for the live feed
+│       ├── ingest/route.ts            # Ingestion trigger + manual injection
+│       ├── analyze/page/route.ts      # Target scraper (reddit/youtube/telegram)
+│       └── analytics/{overview,sentiment,demographics,trends,graph}/
+└── ml/                                # Python service — see ml/README.md
+    ├── Dockerfile                     # Deploy target (NOT Vercel)
+    ├── download_models.py             # Pre-fetch weights
+    ├── config.py                      # Model registry
+    ├── main.py                        # FastAPI app
+    └── {sentiment,emotion,sarcasm,toxicity,topics,trends,embeddings}/
 ```
 
 ---
 
-## 5. Environment Variables & Secret Configuration
+## 5. Non-negotiable engineering rule: never fabricate a metric
 
-The project uses the following environment variables (defined in `.env` and Vercel Project Settings):
+The sponsor is an intelligence agency. A number an analyst cannot trust is
+worse than no number.
 
-```env
-# MONGODB ATLAS (Active Production Cluster)
-MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.nkfwjel.mongodb.net/sih26152?retryWrites=true&w=majority
+**Do not use `Math.random()` (or any synthetic default) anywhere in an analysis
+path.** If a value cannot be determined, return `null` and render it as
+"Unknown". This is enforced by types: `followerCount`, `inferredLocation`,
+`estimatedAgeBracket`, and `detectedLanguage` are all nullable.
 
-# NEXTAUTH & GOOGLE OAUTH
-NEXTAUTH_URL=https://sih-26152.vercel.app
-NEXTAUTH_SECRET=your_nextauth_secret_key
-GOOGLE_CLIENT_ID=your_google_oauth_client_id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
+An earlier revision violated this in seven places — random confidence scores,
+randomly assigned cities, randomly generated graph edges that then fed
+PageRank, invented follower counts that drove KOL ranking, random trend growth
+rates. All have been removed. Do not reintroduce them.
 
-# TELEGRAM (MTProto Ingestion)
-TELEGRAM_API_ID=your_telegram_api_id
-TELEGRAM_API_HASH=your_telegram_api_hash
-TELEGRAM_PHONE=
-
-# REDDIT (Optional API - Native Public JSON Gateway active by default)
-REDDIT_CLIENT_ID=
-REDDIT_CLIENT_SECRET=
-REDDIT_USER_AGENT=SIH2026_Monitor:v1.0
-
-# YOUTUBE (Google Cloud Data API v3)
-YOUTUBE_API_KEY=
-```
+Corollary: the API reports **coverage** and **method**. `/api/analytics/
+demographics` returns the share of authors each attribute could be inferred
+for; `/api/analytics/trends` returns its bucket size and z-threshold;
+`/api/analytics/graph` returns the partition's modularity. A reader can judge
+the numbers instead of trusting them.
 
 ---
 
-## 6. How the 5 Core Pillars Are Implemented
+## 6. How the five components are implemented
 
-### Component A: Ingestion & Timeline Management
-* **Location:** `src/lib/ingestion/`, `src/app/api/analyze/page/route.ts`, `src/components/TimelineScrubber.tsx`
-* **Mechanism:** 
-  * Ingests real posts from Reddit public JSON (`https://www.reddit.com/r/<sub_name>/hot.json`), YouTube comment threads, Telegram MTProto feeds, and Twitter streams.
-  * Normalizes all posts into ISO-8601 timestamps and indexes them chronologically.
-  * The **Timeline Scrubber** filters all analytics APIs using `?cutoffTime=ISO_TIMESTAMP`, allowing real-time step-through replay from $T_0$ to $T_n$.
+### A — Ingestion & Timeline
+`src/lib/ingestion/`, `src/app/api/{ingest,analyze/page}/route.ts`
 
-### Component B: Multi-Dimensional Sentiment Inference
-* **Location:** `src/lib/nlp/emotionEngine.ts`, `src/components/SentimentEmotionView.tsx`
-* **Mechanism:**
-  * Detects 7 nuanced emotion classes: `Excitement`, `Anxiety`, `Anger`, `Joy`, `Fear`, `Supportive`, `Against`.
-  * Sarcasm detection using linguistic markers (`oh great`, `slow clap`, quotation ironies, emoji sarcasm).
-  * Stance Classification (`Supportive`, `Opposing`, `Neutral`) determining consensus drift.
+* **Reddit** — public `.json` gateway, no credentials. Fully working.
+* **Telegram** — two routes: the `t.me/s/<channel>` public web preview (works
+  for any public channel, no credentials) and the Bot API (only reads chats the
+  bot was added to). Full history needs MTProto; see §9.
+* **YouTube** — Data API v3 comment threads; skipped without `YOUTUBE_API_KEY`.
+* **X, Instagram, Facebook** — **not implemented.** See §9.
+* Timestamps are normalised to ISO-8601. All analytics routes accept
+  `?cutoffTime=` for timeline replay, and drop unparseable timestamps rather
+  than letting `NaN` propagate.
 
-### Component C: Automated Demographic Profiling
-* **Location:** `src/lib/nlp/demographicProfiler.ts`, `src/components/DemographicRadarView.tsx`
-* **Mechanism:**
-  * **Age Brackets:** `<18`, `18-24`, `25-34`, `35-50`, `50+` (inferred from slang density, emoji frequency, bio keywords).
-  * **Geographic Distribution:** SpaCy NER mapping location entities to Indian metros and global hubs.
-  * **Language Detection:** Identifies English, Hindi (Devanagari), Hinglish (Code-Mixed), Tamil, Bengali.
-  * **Interest Vectors:** Classifies affinity into Tech & AI, Geopolitics, Finance, Defense, Entertainment.
+### B — Sentiment & Emotion
+`ml/` (primary) → `src/lib/nlp/emotionEngine.ts` (fallback)
 
-### Component D: Real-Time Trend & Topic Detection
-* **Location:** `src/app/api/analytics/trends/route.ts`, `src/components/TrendTopicDetector.tsx`
-* **Mechanism:**
-  * Rolling $Z$-score anomaly calculation on keyword frequencies.
-  * Flags topics surging $> 150\%$ above baseline as `SPIKE` with viral growth badges and dominant emotions.
+* Sentiment: `cardiffnlp/twitter-roberta-base-sentiment-latest`
+* Emotion: `SamLowe/roberta-base-go_emotions` (28 labels)
+* Sarcasm: `helinivan/multilingual-sarcasm-detector`
+* Toxicity: `unitary/toxic-bert`
 
-### Component E: Link Analysis & Network Topology
-* **Location:** `src/lib/graph/networkAnalyzer.ts`, `src/components/NetworkGraphView.tsx`
-* **Mechanism:**
-  * Builds directed graph of retweets, replies, mentions, and quotes.
-  * Power-iteration **PageRank** ($d=0.85$) + Betweenness Centrality to score Key Opinion Leaders (KOLs).
-  * **Louvain Modularity Clustering** dividing users into 4 distinct color-coded communities.
-  * Botnet detection heuristics (high post velocity with minimal follower reciprocation).
-  * Canvas physics with node dragging, zoom/pan, and slide-over Node Dossier inspection.
+The GoEmotions taxonomy does not match this project's `EmotionType`. The
+mapping lives in `mapEmotion()` in `src/lib/ml/client.ts`: GoEmotions `fear` →
+our `anxiety`, `love`/`optimism` → `supportive`, and so on.
+
+**Stance is a documented heuristic, not a model output.** `deriveStance()`
+infers it from polarity plus supportive/hostile emotion mass. A fine-tuned
+stance classifier is the correct fix (§9); until then, call it inferred stance.
+
+### C — Demographic Profiling
+`src/lib/nlp/demographicProfiler.ts`
+
+Regex and lexicon based, with **no ML behind it yet** — this is the weakest
+component and the largest remaining gap (§9). Age from slang density, geography
+from word-boundary city matching, language from Unicode script ranges plus a
+Hinglish marker list, interests from keyword sets. Every field returns `null`
+when no evidence is found.
+
+### D — Trend & Topic Detection
+`src/app/api/analytics/trends/route.ts`
+
+Genuine rolling **z-score**: the timeline is bucketed hourly, and a keyword is
+flagged as a spike when its latest bucket exceeds its own historical mean by
+≥ 2.0 standard deviations. Growth compares the trailing half of the window to
+the leading half. The response includes the parameters used.
+
+### E — Link Analysis & Network Topology
+`src/lib/graph/`
+
+* **Edges** come only from observed replies and mentions. Nothing synthesised.
+* **PageRank** — damped power iteration (d=0.85), with dangling-node mass
+  redistribution and early exit on convergence.
+* **Betweenness** — real Brandes (2001), O(V·E), normalised to [0,1].
+* **Communities** — real Louvain (Blondel et al. 2008), two-phase with
+  aggregation. Reported alongside Newman-Girvan modularity Q so the partition's
+  quality is visible. Community names are derived from members' actual dominant
+  hashtags.
+* **Influence score** blends PageRank, betweenness, in-degree, and reach —
+  reweighting to structure alone on platforms that expose no follower count.
 
 ---
 
-## 7. Working Commands & Verification
+## 7. Environment variables
 
-### Local Development:
+See `.env.example`. Two that matter most:
+
+* `NEXTAUTH_SECRET` — **required**, ≥32 chars. The app throws on startup
+  without it. There is deliberately no fallback default.
+* `ML_API_URL` — where the Python service lives. Defaults to
+  `http://127.0.0.1:8000`. Set `ML_ENABLED=false` to force the lexicon path.
+
+---
+
+## 8. Commands
+
 ```bash
-npm run dev
-# Starts local server at http://localhost:3000
-```
-
-### Production Build & Type Check:
-```bash
+# Dashboard
+npm install && npm run dev            # http://localhost:3000
+npx tsc --noEmit                      # type check
 npm run build
-# Verified with 0 errors across all 13 routes and static pages
-```
 
-### Git Workflow:
-```bash
-git add .
-git commit -m "feat(module): description"
-git push origin main
-# Vercel automatically deploys every push to https://sih-26152.vercel.app
+# ML service (first run downloads ~2 GB of weights)
+cd ml
+python -m venv .venv && .venv/Scripts/activate     # Windows
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt
+python download_models.py
+uvicorn main:app --port 8000
+pytest                                # test suite
 ```
 
 ---
 
-## 8. Immediate Next Roadmap Items for Incoming Agents
+## 9. Known gaps — the honest backlog
 
-If you are continuing development, prioritize these tasks:
+Ordered by scoring impact against the problem statement.
 
-1. **Multi-User OAuth Account Connector (1st-Party Insights):**
-   - Add a `/settings/accounts` page with 1-click OAuth buttons for Instagram Business Login (`instagram_manage_insights`), YouTube (`youtube.readonly`), and Reddit.
-   - Save connected tokens in the MongoDB `users` collection to allow creators to view their private reach alongside public OSINT.
+1. **X (Twitter) ingestion — not implemented.** An Essential platform. Blocked
+   on API cost (Basic tier ~$100/mo). Alternatives: a documented sample-corpus
+   mode, or academic access. **Do not mock it and present it as live.**
+2. **Demographic profiling has no ML** (Component C). Regex only. Needs a real
+   model, or at minimum an honest accuracy measurement.
+3. **Stance classification is heuristic.** The PS names "supportive, against"
+   explicitly. Needs a fine-tuned classifier.
+4. **No evaluation.** Nothing reports precision/recall for any classifier.
+   Hand-label ~200 posts and publish a confusion matrix — it is worth more than
+   another chart, and no competing team will have one.
+5. **ML service not deployed.** `Dockerfile` and `render.yaml` are ready.
+   Until it is deployed, production runs the lexicon fallback.
+6. **Instagram / Facebook** — not implemented (Desirable tier).
+7. **MTProto Telegram** for full channel history — needs a one-time
+   interactive login to mint `TELEGRAM_SESSION`.
+8. **No SSE/WebSocket streaming.** The dashboard polls.
 
-2. **Automated Intelligence Dossier Export:**
-   - Add an "Export Intelligence Report" button generating downloadable PDF/JSON summaries for security analysts.
+---
 
-3. **Live WebSocket / SSE Real-Time Streaming:**
-   - Upgrade `/api/stream` to Server-Sent Events (SSE) to push newly ingested tweets/comments directly to the UI without manual page refresh.
+## 10. Attribution
+
+The `ml/` service was contributed by **Rishiraj-De** via PR #1.
