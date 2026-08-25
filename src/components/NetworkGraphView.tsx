@@ -3,7 +3,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import * as d3 from 'd3-force';
 import { NetworkTopology, GraphNode, GraphLink } from '@/types/intelligence';
-import { Share2, ZoomIn, ZoomOut, Maximize2, ShieldAlert, Sparkles, Filter } from 'lucide-react';
+import { Share2, ZoomIn, ZoomOut, RotateCcw, Sparkles } from 'lucide-react';
 
 interface NetworkGraphViewProps {
   topology: NetworkTopology;
@@ -16,27 +16,33 @@ export const NetworkGraphView: React.FC<NetworkGraphViewProps> = ({
   onSelectNode,
   selectedNode
 }) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [colorMode, setColorMode] = useState<'community' | 'sentiment'>('community');
   const [filterKOLOnly, setFilterKOLOnly] = useState(false);
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 });
+  const isDraggingCanvas = useRef(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+  const draggedNodeRef = useRef<any | null>(null);
 
   const communityColors = ['#00f0ff', '#10b981', '#f59e0b', '#f43f5e', '#a855f7', '#3b82f6'];
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const width = canvas.parentElement?.clientWidth || 800;
-    const height = 480;
-    canvas.width = width * window.devicePixelRatio;
-    canvas.height = height * window.devicePixelRatio;
+    const width = container.clientWidth || 800;
+    const height = 520;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
-    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    ctx.scale(dpr, dpr);
 
     // Deep clone nodes and links to allow d3-force to mutate coordinates
     let filteredNodes: GraphNode[] = topology.nodes.map(n => ({ ...n }));
@@ -53,13 +59,14 @@ export const NetworkGraphView: React.FC<NetworkGraphViewProps> = ({
       })
       .map(l => ({ ...l }));
 
-    // Set up D3 Force Simulation
+    // Set up D3 Force Simulation with wide spacing and strong repulsion
     const simulation = d3.forceSimulation(filteredNodes as any)
-      .force('link', d3.forceLink(filteredLinks).id((d: any) => d.id).distance(60))
-      .force('charge', d3.forceManyBody().strength(-120))
+      .force('link', d3.forceLink(filteredLinks).id((d: any) => d.id).distance(140))
+      .force('charge', d3.forceManyBody().strength(-450))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius((d: any) => Math.max(8, d.centralityScore / 8 + 6)))
-      .alphaDecay(0.03);
+      .force('collision', d3.forceCollide().radius((d: any) => Math.max(22, (d.centralityScore / 4) + 16)))
+      .alpha(1)
+      .alphaDecay(0.028);
 
     let animationFrameId: number;
 
@@ -77,21 +84,21 @@ export const NetworkGraphView: React.FC<NetworkGraphViewProps> = ({
         ctx.lineTo(link.target.x, link.target.y);
         
         if (link.type === 'retweet') {
-          ctx.strokeStyle = 'rgba(0, 240, 255, 0.25)';
-          ctx.lineWidth = 1.2;
+          ctx.strokeStyle = 'rgba(0, 240, 255, 0.35)';
+          ctx.lineWidth = 1.5;
         } else if (link.type === 'reply') {
-          ctx.strokeStyle = 'rgba(168, 85, 247, 0.25)';
-          ctx.lineWidth = 1;
+          ctx.strokeStyle = 'rgba(168, 85, 247, 0.35)';
+          ctx.lineWidth = 1.2;
         } else {
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-          ctx.lineWidth = 0.8;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+          ctx.lineWidth = 1;
         }
         ctx.stroke();
       });
 
-      // 2. Draw Nodes
+      // 2. Draw Nodes Body & Halos
       filteredNodes.forEach(node => {
-        const radius = Math.max(5, Math.min(18, (node.centralityScore / 8) + 4));
+        const radius = Math.max(7, Math.min(22, (node.centralityScore / 6) + 6));
         const isSelected = selectedNode?.id === node.id;
         const isHovered = hoveredNode?.id === node.id;
 
@@ -103,29 +110,55 @@ export const NetworkGraphView: React.FC<NetworkGraphViewProps> = ({
           color = node.dominantSentiment === 'positive' ? '#10b981' : node.dominantSentiment === 'negative' ? '#f43f5e' : '#94a3b8';
         }
 
-        // Draw Glow Halo for KOLs or Selected
+        // Outer Glow Ring for KOLs or Selected
         if (node.isKOL || isSelected || isHovered) {
           ctx.beginPath();
-          ctx.arc(node.x!, node.y!, radius + 4, 0, 2 * Math.PI);
-          ctx.fillStyle = isSelected ? 'rgba(0, 240, 255, 0.5)' : node.isBotSuspicious ? 'rgba(244, 63, 94, 0.4)' : `${color}40`;
+          ctx.arc(node.x!, node.y!, radius + 5, 0, 2 * Math.PI);
+          ctx.fillStyle = isSelected
+            ? 'rgba(0, 240, 255, 0.45)'
+            : node.isBotSuspicious
+            ? 'rgba(244, 63, 94, 0.35)'
+            : `${color}35`;
           ctx.fill();
         }
 
-        // Main Node Body
+        // Inner Circle
         ctx.beginPath();
         ctx.arc(node.x!, node.y!, radius, 0, 2 * Math.PI);
         ctx.fillStyle = node.isBotSuspicious ? '#f43f5e' : color;
         ctx.fill();
-        ctx.strokeStyle = isSelected ? '#ffffff' : 'rgba(0, 0, 0, 0.6)';
-        ctx.lineWidth = isSelected ? 2 : 1;
+        ctx.strokeStyle = isSelected ? '#ffffff' : 'rgba(15, 23, 42, 0.8)';
+        ctx.lineWidth = isSelected ? 2.5 : 1.5;
         ctx.stroke();
+      });
 
-        // Node Label (for KOLs or selected/hovered)
-        if (node.isKOL || isHovered || isSelected || radius > 10) {
-          ctx.font = '10px monospace';
-          ctx.fillStyle = '#ffffff';
+      // 3. Draw Clean Non-Overlapping Labels (Hovered or Selected or Top Central KOLs)
+      filteredNodes.forEach(node => {
+        const isSelected = selectedNode?.id === node.id;
+        const isHovered = hoveredNode?.id === node.id;
+        const isTopKOL = node.isKOL && node.centralityScore > 75;
+
+        if (isHovered || isSelected || isTopKOL) {
+          const label = `@${node.username}`;
+          ctx.font = 'bold 11px monospace';
+          const textMetrics = ctx.measureText(label);
+          const textWidth = textMetrics.width;
+          const radius = Math.max(7, Math.min(22, (node.centralityScore / 6) + 6));
+          const textY = node.y! + radius + 15;
+
+          // Draw pill background
+          ctx.fillStyle = isSelected ? 'rgba(0, 240, 255, 0.95)' : 'rgba(15, 23, 42, 0.88)';
+          ctx.beginPath();
+          ctx.roundRect(node.x! - textWidth / 2 - 5, textY - 11, textWidth + 10, 16, 4);
+          ctx.fill();
+          ctx.strokeStyle = isSelected ? '#000000' : 'rgba(255, 255, 255, 0.2)';
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+
+          // Draw text
+          ctx.fillStyle = isSelected ? '#000000' : '#ffffff';
           ctx.textAlign = 'center';
-          ctx.fillText(`@${node.username}`, node.x!, node.y! + radius + 11);
+          ctx.fillText(label, node.x!, textY);
         }
       });
 
@@ -135,50 +168,115 @@ export const NetworkGraphView: React.FC<NetworkGraphViewProps> = ({
 
     render();
 
-    // Mouse Interaction for Hover and Click Selection
-    const handleMouseMove = (e: MouseEvent) => {
+    // Mouse Interaction for Hover, Node Dragging, and Canvas Pan
+    const getCanvasCoords = (e: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
       const mx = (e.clientX - rect.left - transform.x) / transform.k;
       const my = (e.clientY - rect.top - transform.y) / transform.k;
+      return { mx, my };
+    };
 
+    const handleMouseDown = (e: MouseEvent) => {
+      const { mx, my } = getCanvasCoords(e);
+
+      // Check if clicking a node
+      for (const n of filteredNodes) {
+        const radius = Math.max(7, Math.min(22, (n.centralityScore / 6) + 6));
+        const dist = Math.hypot(n.x! - mx, n.y! - my);
+        if (dist <= radius + 5) {
+          draggedNodeRef.current = n;
+          n.fx = n.x;
+          n.fy = n.y;
+          simulation.alphaTarget(0.3).restart();
+          return;
+        }
+      }
+
+      // Otherwise, start dragging canvas pan
+      isDraggingCanvas.current = true;
+      dragStart.current = { x: e.clientX - transform.x, y: e.clientY - transform.y };
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const { mx, my } = getCanvasCoords(e);
+
+      if (draggedNodeRef.current) {
+        draggedNodeRef.current.fx = mx;
+        draggedNodeRef.current.fy = my;
+        return;
+      }
+
+      if (isDraggingCanvas.current) {
+        setTransform(prev => ({
+          ...prev,
+          x: e.clientX - dragStart.current.x,
+          y: e.clientY - dragStart.current.y
+        }));
+        return;
+      }
+
+      // Hover check
       let found: GraphNode | null = null;
       for (const n of filteredNodes) {
-        const radius = Math.max(6, n.centralityScore / 8 + 4);
+        const radius = Math.max(7, Math.min(22, (n.centralityScore / 6) + 6));
         const dist = Math.hypot(n.x! - mx, n.y! - my);
-        if (dist <= radius + 3) {
+        if (dist <= radius + 5) {
           found = n;
           break;
         }
       }
       setHoveredNode(found);
-      canvas.style.cursor = found ? 'pointer' : 'default';
+      canvas.style.cursor = found ? 'pointer' : isDraggingCanvas.current ? 'grabbing' : 'default';
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (draggedNodeRef.current) {
+        draggedNodeRef.current.fx = null;
+        draggedNodeRef.current.fy = null;
+        draggedNodeRef.current = null;
+        simulation.alphaTarget(0);
+      }
+      isDraggingCanvas.current = false;
     };
 
     const handleClick = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      const mx = (e.clientX - rect.left - transform.x) / transform.k;
-      const my = (e.clientY - rect.top - transform.y) / transform.k;
+      const { mx, my } = getCanvasCoords(e);
 
       for (const n of filteredNodes) {
-        const radius = Math.max(6, n.centralityScore / 8 + 4);
+        const radius = Math.max(7, Math.min(22, (n.centralityScore / 6) + 6));
         const dist = Math.hypot(n.x! - mx, n.y! - my);
-        if (dist <= radius + 3) {
+        if (dist <= radius + 5) {
           onSelectNode(n);
           return;
         }
       }
     };
 
-    canvas.addEventListener('mousemove', handleMouseMove);
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+      setTransform(prev => ({
+        ...prev,
+        k: Math.max(0.4, Math.min(3.0, prev.k * zoomFactor))
+      }));
+    };
+
+    canvas.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
     canvas.addEventListener('click', handleClick);
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
 
     return () => {
       simulation.stop();
       cancelAnimationFrame(animationFrameId);
-      canvas.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
       canvas.removeEventListener('click', handleClick);
+      canvas.removeEventListener('wheel', handleWheel);
     };
-  }, [topology, colorMode, filterKOLOnly, selectedNode, hoveredNode, transform]);
+  }, [topology, colorMode, filterKOLOnly, selectedNode, transform]);
 
   return (
     <div className="intel-card rounded-xl p-4 border border-intel-border mb-6">
@@ -238,18 +336,25 @@ export const NetworkGraphView: React.FC<NetworkGraphViewProps> = ({
           {/* Zoom controls */}
           <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
             <button
-              onClick={() => setTransform(t => ({ ...t, k: Math.min(2.5, t.k + 0.2) }))}
+              onClick={() => setTransform(t => ({ ...t, k: Math.min(3.0, t.k + 0.2) }))}
               className="p-1 text-slate-400 hover:text-white"
               title="Zoom In"
             >
               <ZoomIn className="w-3.5 h-3.5" />
             </button>
             <button
-              onClick={() => setTransform(t => ({ ...t, k: Math.max(0.6, t.k - 0.2) }))}
+              onClick={() => setTransform(t => ({ ...t, k: Math.max(0.4, t.k - 0.2) }))}
               className="p-1 text-slate-400 hover:text-white"
               title="Zoom Out"
             >
               <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setTransform({ x: 0, y: 0, k: 1 })}
+              className="p-1 text-slate-400 hover:text-white"
+              title="Reset View"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
             </button>
           </div>
 
@@ -258,12 +363,12 @@ export const NetworkGraphView: React.FC<NetworkGraphViewProps> = ({
       </div>
 
       {/* Interactive Network Canvas */}
-      <div className="relative w-full h-[480px] bg-slate-950/80 rounded-lg overflow-hidden border border-slate-900">
+      <div ref={containerRef} className="relative w-full h-[520px] bg-slate-950/80 rounded-lg overflow-hidden border border-slate-900">
         <canvas ref={canvasRef} className="w-full h-full block" />
 
         {/* Hover Tooltip Overlay */}
         {hoveredNode && (
-          <div className="absolute top-3 left-3 bg-slate-900/90 backdrop-blur-md border border-intel-cyan/40 p-2.5 rounded-lg text-xs font-mono shadow-xl z-20 pointer-events-none max-w-xs">
+          <div className="absolute top-3 left-3 bg-slate-900/95 backdrop-blur-md border border-intel-cyan/40 p-2.5 rounded-lg text-xs font-mono shadow-xl z-20 pointer-events-none max-w-xs">
             <div className="font-bold text-white text-sm flex items-center gap-1.5">
               <span>@{hoveredNode.username}</span>
               {hoveredNode.isKOL && (
@@ -295,7 +400,7 @@ export const NetworkGraphView: React.FC<NetworkGraphViewProps> = ({
             ))}
           </div>
           <div className="text-slate-400 text-[10px]">
-            *Click node to inspect influence dossier
+            *Drag nodes to reposition • Scroll to zoom • Click node for dossier
           </div>
         </div>
       </div>
