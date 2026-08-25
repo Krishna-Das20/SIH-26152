@@ -1,8 +1,14 @@
 # AGENTS.md — AI Agent Context & Engineering Blueprint
 
 > **Notice for collaborating AI agents (Cursor, Claude, Copilot, Devin, etc.):**
-> This document is the architectural ground truth for **SIH26-26152**. Read it
-> before changing anything.
+>
+> **Read [PROGRESS.md](PROGRESS.md) FIRST** — it is the handover note: current
+> status, what is broken, and what to do next. This file is the architectural
+> ground truth; PROGRESS.md is the current state. You need both, in that order.
+>
+> **Before you push:** update PROGRESS.md in the same commit. A `pre-push` hook
+> blocks pushes that change `src/` or `ml/` without touching it. Enable it once
+> per clone with `git config core.hooksPath .githooks`.
 >
 > **It documents what the code actually does, not what it aspires to do.**
 > Anything not yet implemented is listed in §9 as a known gap. If you implement
@@ -153,7 +159,16 @@ SIH 26152/
 
 ---
 
-## 5. Non-negotiable engineering rule: never fabricate a metric
+## 5. Non-negotiable engineering rules
+
+### Keep PROGRESS.md current
+
+Update it in the same push as any change to `src/` or `ml/`. It is how the next
+agent — with no memory of this session — knows where to start. A stale status
+file is worse than none, because it will be acted on. `.githooks/pre-push`
+enforces this.
+
+### Never fabricate a metric
 
 The sponsor is an intelligence agency. A number an analyst cannot trust is
 worse than no number.

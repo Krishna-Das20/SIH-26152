@@ -7,7 +7,7 @@
 > **Anyone pushing to `main` must update this file in the same push.** A stale
 > status file is worse than none — the next agent will act on it.
 
-**Last updated:** 2026-08-25 · **HEAD:** `b7d1415` · **Branch:** `main`
+**Last updated:** 2026-08-25 · **State as of:** `6e505a2` · **Branch:** `main`
 
 ---
 
@@ -212,6 +212,7 @@ judge who catches an invented number discounts everything else.
 
 | Commit | What changed |
 | :-- | :-- |
+| `6e505a2` | PROGRESS.md handover note + pre-push hook enforcing it |
 | `b7d1415` | Reddit reports missing-credentials when the legacy gateway errors |
 | `cc8eaab` | Cross-vector brief + frozen corpus + network-independent demo |
 | `29d4607` | Multi-tenant OAuth for all six platforms, encrypted token storage |
