@@ -1,0 +1,70 @@
+#!/bin/sh
+#
+# Blocks a push that changes code without updating PROGRESS.md.
+#
+# PROGRESS.md is the handover note between teammates and between AI agents. A
+# stale one is worse than none, because the next agent acts on it. This hook is
+# the enforcement layer: the rule is also written in AGENTS.md, but a rule only
+# an agent reads is a rule only an agent follows.
+#
+# Deliberately narrow: doc-only, config-only and hook-only pushes pass through.
+# Only changes under src/ or ml/ require a status update.
+#
+# Enable once per clone:   git config core.hooksPath .githooks
+# Override when genuinely not needed:   git push --no-verify
+
+remote_ref_exists() {
+  git rev-parse --verify --quiet "$1" >/dev/null 2>&1
+}
+
+while read -r _local_ref _local_sha remote_ref remote_sha; do
+  # Deleting a branch: nothing to check.
+  case "$_local_sha" in
+    0000000*) continue ;;
+  esac
+
+  # New branch on the remote: compare against the default branch instead of
+  # the all-zero sha, which would otherwise diff the entire history.
+  case "$remote_sha" in
+    0000000*)
+      base=$(git merge-base "$_local_sha" origin/main 2>/dev/null) || base=""
+      ;;
+    *)
+      base="$remote_sha"
+      ;;
+  esac
+
+  [ -z "$base" ] && continue
+
+  changed=$(git diff --name-only "$base" "$_local_sha" 2>/dev/null)
+  [ -z "$changed" ] && continue
+
+  touches_code=$(printf '%s\n' "$changed" | grep -E '^(src/|ml/)' | head -1)
+  [ -z "$touches_code" ] && continue
+
+  touches_progress=$(printf '%s\n' "$changed" | grep -x 'PROGRESS.md' | head -1)
+
+  if [ -z "$touches_progress" ]; then
+    echo ""
+    echo "  ┌─────────────────────────────────────────────────────────────┐"
+    echo "  │  PUSH BLOCKED — PROGRESS.md was not updated                  │"
+    echo "  └─────────────────────────────────────────────────────────────┘"
+    echo ""
+    echo "  This push changes code under src/ or ml/, but leaves the status"
+    echo "  file untouched. PROGRESS.md is how the next teammate — human or"
+    echo "  AI agent — knows what state the project is in."
+    echo ""
+    echo "  Update at minimum:"
+    echo "    • the 'Last updated' date and HEAD sha"
+    echo "    • anything in §3 (components) or §4 (platforms) that changed"
+    echo "    • a row in §10 (recent history)"
+    echo ""
+    echo "  Then:  git add PROGRESS.md && git commit --amend --no-edit"
+    echo ""
+    echo "  If this genuinely needs no status change:  git push --no-verify"
+    echo ""
+    exit 1
+  fi
+done
+
+exit 0
