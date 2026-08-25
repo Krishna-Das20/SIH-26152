@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { tenantPosts } from '@/lib/tenant';
 import { buildNetworkTopology } from '@/lib/graph/networkAnalyzer';
 import { SocialPost, EmotionType, GraphNode } from '@/types/intelligence';
+import { analyzeNarratives } from '@/lib/narratives';
 
 /**
  * Audience Intelligence Brief — the cross-vector fusion layer.
@@ -350,6 +351,53 @@ export async function GET(req: Request) {
       });
       break; // one example makes the point
     }
+  }
+
+  // ── 7. NARRATIVE MUTATION (additive — requires ML service) ──────────
+  // If the embedding service is available, surface the highest-mutation
+  // narrative as a cross-vector finding.  Silently skipped when the ML
+  // service is down — no degraded/fake output.
+  try {
+    const narrativeResult = await analyzeNarratives(posts);
+    const topNarrative = narrativeResult.narratives[0]; // sorted by mutation desc
+
+    if (
+      topNarrative &&
+      topNarrative.mutationScore !== null &&
+      topNarrative.mutationScore > 30
+    ) {
+      const platformSeq = topNarrative.platformFlow
+        .map((pf) => pf.platform.charAt(0).toUpperCase() + pf.platform.slice(1))
+        .join(' → ');
+
+      findings.push({
+        id: 'narrative-mutation',
+        vectors: ['sentiment', 'trends'],
+        severity: topNarrative.mutationScore >= 60 ? 'high' : 'notable',
+        headline: `Narrative "${topNarrative.title}" shows significant mutation across observations`,
+        detail:
+          `Across ${topNarrative.postCount} posts (${platformSeq}), ` +
+          `the narrative shifted ${topNarrative.semanticShift !== null ? topNarrative.semanticShift.toFixed(1) + '% semantically' : 'unmeasured semantically'}, ` +
+          `${topNarrative.sentimentShift !== null ? topNarrative.sentimentShift.toFixed(1) + '% in sentiment' : 'unmeasured in sentiment'}. ` +
+          `Composite mutation score: ${topNarrative.mutationScore.toFixed(1)}%. ` +
+          `This indicates the underlying narrative changed meaningfully between early and later observations.`,
+        evidence: {
+          narrativeId: topNarrative.id,
+          title: topNarrative.title,
+          mutationScore: topNarrative.mutationScore,
+          semanticShift: topNarrative.semanticShift,
+          sentimentShift: topNarrative.sentimentShift,
+          emotionShift: topNarrative.emotionShift,
+          keywordShift: topNarrative.keywordShift,
+          platforms: topNarrative.platforms,
+          platformSequence: platformSeq,
+          postCount: topNarrative.postCount,
+        },
+      });
+    }
+  } catch (e) {
+    // ML service unavailable — narrative finding simply does not appear.
+    // This is intentional: no degraded output.
   }
 
   const order = { high: 0, notable: 1, info: 2 } as const;

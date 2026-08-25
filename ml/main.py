@@ -30,6 +30,8 @@ from schemas.social import (
     ContentAnalysisResult,
     HealthResponse,
     ModelsResponse,
+    EmbeddingRequest,
+    EmbeddingResponse,
 )
 
 from pipeline import NLPAnalysisPipeline
@@ -156,6 +158,33 @@ async def analyze_reddit(req: RedditAnalysisRequest):
         return response
     except Exception as exc:
         logger.exception("Error in Reddit analysis")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/embeddings", response_model=EmbeddingResponse)
+async def generate_embeddings(req: EmbeddingRequest):
+    """Generate semantic embeddings for a list of texts.
+
+    Uses the sentence-transformers model loaded at startup (default:
+    all-MiniLM-L6-v2, 384-dim).  The model is NOT loaded per-request.
+    """
+    try:
+        if not pipeline.embedding_encoder.is_loaded:
+            raise HTTPException(
+                status_code=503,
+                detail="Embedding model not yet loaded. Wait for startup to finish.",
+            )
+
+        vectors = pipeline.embedding_encoder.encode_batch(req.texts)
+        return EmbeddingResponse(
+            embeddings=vectors.tolist(),
+            model=pipeline.embedding_encoder.model_name,
+            dimension=int(vectors.shape[1]) if vectors.ndim == 2 else 0,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Error generating embeddings")
         raise HTTPException(status_code=500, detail=str(exc))
 
 

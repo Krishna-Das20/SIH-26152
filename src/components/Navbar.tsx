@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Shield, RefreshCw, LogIn, LogOut, User, Sparkles } from 'lucide-react';
+import { Shield, RefreshCw, LogIn, LogOut, User, Sparkles, TrendingUp } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 
@@ -60,6 +60,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
+        {/* Narratives Link */}
+        <Link
+          href="/narratives"
+          className="px-3 py-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 text-xs font-medium flex items-center gap-1.5 transition-all"
+        >
+          <TrendingUp className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Narratives</span>
+        </Link>
         {/* Platform Ingestion Filter Tabs */}
         <div className="flex items-center gap-1 overflow-x-auto bg-slate-900/80 p-1 rounded-lg border border-slate-800">
           {platforms.map(p => (

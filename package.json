@@ -9,7 +9,8 @@
     "lint": "next lint",
     "verify:graph": "tsx src/lib/graph/__tests__/verify.ts",
     "verify:connectors": "tsx src/lib/ingestion/__tests__/verify-connectors.ts",
-    "verify": "npm run verify:graph && npm run verify:connectors && npm run verify:tenancy",
+    "verify:narratives": "tsx src/lib/narratives/__tests__/verify-narratives.ts",
+    "verify": "npm run verify:graph && npm run verify:connectors && npm run verify:tenancy && npm run verify:narratives",
     "verify:tenancy": "tsx src/lib/__tests__/verify-tenancy.ts"
   },
   "dependencies": {
