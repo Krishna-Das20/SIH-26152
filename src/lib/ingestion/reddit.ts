@@ -231,8 +231,14 @@ export const redditConnector: Connector = {
         };
       }
 
-      // No credentials — try the legacy gateway before giving up.
-      const { code, children } = await fetchViaPublicJson(subreddit, capped);
+      // No credentials — try the legacy gateway before giving up. Its failure
+      // must not surface as a generic 'error': with no credentials configured,
+      // "missing-credentials" is the correct and actionable answer whether the
+      // gateway 403s, times out, or the network drops.
+      const { code, children } = await fetchViaPublicJson(subreddit, capped).catch(() => ({
+        code: 0,
+        children: [] as RedditChild[],
+      }));
       if (code === 200 && children.length > 0) {
         const posts = children
           .map((c) => toPost(c, subreddit, 'public'))
@@ -245,7 +251,7 @@ export const redditConnector: Connector = {
         posts: [],
         status: 'missing-credentials',
         note:
-          `Reddit's public JSON gateway returned ${code || 403} — it now requires ` +
+          `Reddit's public JSON gateway is unavailable${code ? ` (HTTP ${code})` : ''} — it now requires ` +
           'authentication. Set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET (free, ' +
           '~2 minutes) — see docs/platform-setup.md#reddit',
       };
