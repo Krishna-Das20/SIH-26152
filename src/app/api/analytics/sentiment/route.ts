@@ -1,21 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getAllPosts } from '@/lib/store';
+import { tenantPosts } from '@/lib/tenant';
 import { EmotionType, TimelineDataPoint } from '@/types/intelligence';
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const cutoffTime = searchParams.get('cutoffTime');
-  const platform = searchParams.get('platform');
 
-  let posts = await getAllPosts();
-
-  if (cutoffTime) {
-    const cutoffDate = new Date(cutoffTime).getTime();
-    posts = posts.filter(p => new Date(p.timestamp).getTime() <= cutoffDate);
-  }
-  if (platform && platform !== 'all') {
-    posts = posts.filter(p => p.platform === platform);
-  }
+  // Tenant-scoped: a signed-in user sees only their own data.
+  const { posts } = await tenantPosts(req);
 
   // 1. Emotion Breakdown Count
   const emotionCounts: Record<EmotionType, number> = {

@@ -77,6 +77,10 @@ async function ensureIndexes(db: Db): Promise<void> {
   try {
     await db.collection('posts').createIndex({ id: 1 }, { unique: true, name: 'uniq_post_id' });
     await db.collection('posts').createIndex({ timestamp: 1 }, { name: 'timestamp_asc' });
+    // Every tenant read filters on ownerUserId; without this it is a full scan.
+    await db
+      .collection('posts')
+      .createIndex({ ownerUserId: 1, timestamp: 1 }, { name: 'owner_timestamp' });
   } catch (e) {
     // A pre-existing collection with duplicates will reject the unique index.
     // Log rather than throw: reads still work, and dedup is a maintenance task.
@@ -157,4 +161,31 @@ export async function resetDataset(): Promise<SocialPost[]> {
   }
 
   return global._postsCache;
+}
+
+/**
+ * Returns ONLY the posts belonging to one tenant.
+ *
+ * The userId filter is applied in the database query, not after the fact, so
+ * a large corpus never crosses the tenant boundary even in memory. The
+ * in-memory fallback applies the same filter.
+ */
+export async function getPostsForUser(userId: string): Promise<SocialPost[]> {
+  if (!userId) return [];
+
+  const db = await getDatabase();
+  if (db) {
+    try {
+      await ensureIndexes(db);
+      return await db
+        .collection<SocialPost>('posts')
+        .find({ ownerUserId: userId })
+        .sort({ timestamp: 1 })
+        .toArray();
+    } catch (e) {
+      console.warn('Could not read tenant posts from MongoDB:', e);
+    }
+  }
+
+  return cache().filter((p) => p.ownerUserId === userId);
 }

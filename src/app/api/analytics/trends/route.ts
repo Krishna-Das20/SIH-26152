@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAllPosts } from '@/lib/store';
+import { tenantPosts } from '@/lib/tenant';
 import { TrendTopic, EmotionType, PlatformType, SocialPost } from '@/types/intelligence';
 
 /**
@@ -70,25 +70,10 @@ function stdDev(values: number[], mu: number): number {
 }
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const cutoffTime = searchParams.get('cutoffTime');
-  const platform = searchParams.get('platform');
-
-  let posts = await getAllPosts();
-
-  // Drop items whose timestamp cannot be parsed rather than letting NaN
-  // propagate silently through the bucketing arithmetic.
-  posts = posts.filter((p) => !Number.isNaN(new Date(p.timestamp).getTime()));
-
-  if (cutoffTime) {
-    const cutoffDate = new Date(cutoffTime).getTime();
-    if (!Number.isNaN(cutoffDate)) {
-      posts = posts.filter((p) => new Date(p.timestamp).getTime() <= cutoffDate);
-    }
-  }
-  if (platform && platform !== 'all') {
-    posts = posts.filter((p) => p.platform === platform);
-  }
+  // Tenant-scoped: a signed-in user sees only their own data. tenantPosts also
+  // applies the shared cutoffTime/platform filters and drops unparseable
+  // timestamps, so NaN cannot reach the bucketing arithmetic below.
+  const { posts } = await tenantPosts(req);
 
   if (posts.length === 0) {
     return NextResponse.json({

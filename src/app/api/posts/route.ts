@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAllPosts } from '@/lib/store';
+import { tenantPosts } from '@/lib/tenant';
 
 /**
  * Returns the actual ingested posts, newest first.
@@ -12,29 +12,19 @@ import { getAllPosts } from '@/lib/store';
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const cutoffTime = searchParams.get('cutoffTime');
-  const platform = searchParams.get('platform');
   const limit = Math.min(Number(searchParams.get('limit') || 100), 500);
 
-  let posts = await getAllPosts();
-
-  posts = posts.filter((p) => !Number.isNaN(new Date(p.timestamp).getTime()));
-
-  if (cutoffTime) {
-    const cutoff = new Date(cutoffTime).getTime();
-    if (!Number.isNaN(cutoff)) {
-      posts = posts.filter((p) => new Date(p.timestamp).getTime() <= cutoff);
-    }
-  }
-  if (platform && platform !== 'all') {
-    posts = posts.filter((p) => p.platform === platform);
-  }
+  // Tenant-scoped: a signed-in user sees only their own posts.
+  const { posts, mode } = await tenantPosts(req);
 
   const sorted = [...posts].sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
 
   return NextResponse.json({
+    // Which corpus this is: 'tenant' (the user's own), 'demo' (synthetic), or
+    // 'shared' (single-tenant deployment).
+    mode,
     total: sorted.length,
     posts: sorted.slice(0, limit),
     // How many of these carry transformer output vs the lexicon fallback.

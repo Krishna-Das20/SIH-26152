@@ -82,6 +82,13 @@ export interface SocialPost {
   mentionedUsernames?: string[];
   hashtags: string[];
   
+  /**
+   * Tenant that owns this post in the multi-tenant product. Every query made on
+   * behalf of a signed-in user MUST filter on it — a missing filter is a
+   * cross-tenant data leak. Absent on the single-tenant demo dataset.
+   */
+  ownerUserId?: string;
+
   // NLP analysis
   sentiment: SentimentAnalysis;
 }
