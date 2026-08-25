@@ -7,7 +7,28 @@
 > **Anyone pushing to `main` must update this file in the same push.** A stale
 > status file is worse than none — the next agent will act on it.
 
-**Last updated:** 2026-08-25 · **State as of:** `6e505a2` · **Branch:** `main`
+**Last updated:** 2026-08-25 · **State as of:** `ecdd759` · **Branches:** `main` (stable) · `beta` (PR target)
+
+---
+
+## 0. Branching — read before you open a PR
+
+| Branch | Purpose |
+| :-- | :-- |
+| **`main`** | Stable. This is what Vercel deploys and what we demo. Do not push directly. |
+| **`beta`** | **Open all PRs against this.** Integration branch for teammates and agents. |
+
+```bash
+git checkout beta && git pull
+git checkout -b feat/your-change     # branch off beta, not main
+# ...work...
+git push -u origin feat/your-change  # then open a PR into beta
+```
+
+`beta` is merged into `main` only after the demo still runs: `npm run build`
+passes, `npm run verify` passes, and the dashboard loads with the ML service
+stopped. With the internal hackathon days away, a broken `main` means a broken
+demo — that is the whole reason this branch exists.
 
 ---
 

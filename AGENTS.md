@@ -6,6 +6,9 @@
 > status, what is broken, and what to do next. This file is the architectural
 > ground truth; PROGRESS.md is the current state. You need both, in that order.
 >
+> **Branch off `beta`, not `main`.** `main` is what Vercel deploys and what we
+> demo; all PRs target `beta`. See PROGRESS.md §0.
+>
 > **Before you push:** update PROGRESS.md in the same commit. A `pre-push` hook
 > blocks pushes that change `src/` or `ml/` without touching it. Enable it once
 > per clone with `git config core.hooksPath .githooks`.
