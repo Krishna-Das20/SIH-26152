@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { OverviewMetrics } from '@/components/OverviewMetrics';
 import { PageAnalyzerInput } from '@/components/PageAnalyzerInput';
+import { PlatformStatusPanel } from '@/components/PlatformStatusPanel';
 import { TimelineScrubber } from '@/components/TimelineScrubber';
 import { NetworkGraphView } from '@/components/NetworkGraphView';
 import { SentimentEmotionView } from '@/components/SentimentEmotionView';
@@ -208,6 +209,9 @@ export default function Dashboard() {
 
         {/* 3. Real Target Page / Channel OSINT Scraper (Zero Dummy Data) */}
         <PageAnalyzerInput onAnalyzeSuccess={() => fetchAnalytics()} />
+
+        {/* Component A: honest, runtime-checked coverage of all six platforms */}
+        <PlatformStatusPanel />
 
         {/* 4. Component A & D: Chronological Timeline Scrubber */}
         <TimelineScrubber

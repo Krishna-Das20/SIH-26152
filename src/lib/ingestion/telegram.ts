@@ -2,6 +2,7 @@ import { SocialPost } from '@/types/intelligence';
 import { analyzeSentimentAndEmotion } from '@/lib/nlp/emotionEngine';
 import { inferDemographics } from '@/lib/nlp/demographicProfiler';
 import { enrichPosts } from '@/lib/ml/client';
+import { Connector, ConnectorResult } from './types';
 
 /**
  * Telegram ingestion (Component A, Essential platform).
@@ -313,3 +314,40 @@ export async function fetchTelegramPosts(
     return { posts: [], source: 'unavailable', note: String(err) };
   }
 }
+
+/**
+ * Connector-interface wrapper around the routes above.
+ *
+ * Telegram is the one Essential platform that needs no credentials at all: the
+ * t.me public preview serves any public channel. That makes it the reliable
+ * demo path while the credentialed platforms are being provisioned.
+ */
+export const telegramConnector: Connector = {
+  platform: 'telegram',
+  displayName: 'Telegram',
+  tier: 'essential',
+  requiredEnv: [],
+  worksWithoutCredentials: true,
+  cost: 'none',
+  targetHint: 'a public channel name, e.g. "durov" or a t.me/<channel> URL',
+  setupDoc: 'docs/telegram-setup.md',
+  notes:
+    'Public channels work with no credentials via the t.me preview. A bot token ' +
+    'additionally reads chats the bot has joined. Full history needs MTProto.',
+
+  async fetch(target, limit = 25): Promise<ConnectorResult> {
+    const result = await fetchTelegramPosts(target, limit);
+    return {
+      platform: 'telegram',
+      posts: result.posts,
+      status:
+        result.source === 'unavailable'
+          ? result.posts.length === 0
+            ? 'not-found'
+            : 'ok'
+          : 'ok',
+      source: result.source,
+      note: result.note,
+    };
+  },
+};

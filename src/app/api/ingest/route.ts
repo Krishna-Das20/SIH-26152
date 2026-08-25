@@ -1,95 +1,119 @@
 import { NextResponse } from 'next/server';
-import { fetchLiveRedditPosts } from '@/lib/ingestion/reddit';
-import { fetchLiveYouTubeComments } from '@/lib/ingestion/youtube';
-import { fetchTelegramPosts } from '@/lib/ingestion/telegram';
 import { addPosts, getAllPosts, resetDataset } from '@/lib/store';
 import { analyzeSentimentAndEmotion } from '@/lib/nlp/emotionEngine';
 import { inferDemographics } from '@/lib/nlp/demographicProfiler';
-import { SocialPost } from '@/types/intelligence';
-import { analyzeOne, enrichPosts } from '@/lib/ml/client';
+import { SocialPost, PlatformType } from '@/types/intelligence';
+import { analyzeOne } from '@/lib/ml/client';
+import {
+  ingestFrom,
+  ingestFromAllConfigured,
+  activePlatforms,
+  CONNECTORS,
+} from '@/lib/ingestion/registry';
 
+/**
+ * Multi-platform ingestion trigger (Component A).
+ *
+ * Body options:
+ *   { action: 'reset' }                       restore the demo baseline
+ *   { action: 'custom', customText, platform } inject a manual test post
+ *   { targets: [{ platform, target }] }        ingest specific platforms
+ *   { }                                        ingest every configured platform
+ *
+ * Per-platform shorthands are also accepted for convenience:
+ *   { subreddit, videoId, telegramChannel, xQuery, instagramTag, facebookPageId }
+ */
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const { action, subreddit = 'india', videoId, telegramChannel, platform, customText } = body;
+    const body = await req.json().catch(() => ({} as any));
+    const { action, platform, customText } = body;
 
     if (action === 'reset') {
       const resetData = await resetDataset();
-      return NextResponse.json({ success: true, count: resetData.length, message: 'Dataset reset to baseline.' });
+      return NextResponse.json({
+        success: true,
+        count: resetData.length,
+        message: 'Dataset reset to baseline.',
+      });
     }
 
     if (action === 'custom' && customText) {
-      // Routed through the ML client so manually injected test posts are scored
-      // by the same engine as ingested ones.
       const sentiment = await analyzeOne(`post_custom_${Date.now()}`, customText);
       const demo = inferDemographics('', customText);
       const newCustomPost: SocialPost = {
         id: `post_custom_${Date.now()}`,
-        platform: platform || 'x',
+        platform: (platform as PlatformType) || 'x',
         author: {
           id: `usr_custom_${Date.now()}`,
           username: 'live_analyst',
-          displayName: 'Live Stream Ingestion',
-          platform: platform || 'x',
-          followerCount: null, // manual injection has no real account behind it
-          verified: true,
+          displayName: 'Manual Injection',
+          platform: (platform as PlatformType) || 'x',
+          followerCount: null, // no real account behind a manual injection
+          verified: false,
           estimatedAgeBracket: demo.estimatedAgeBracket,
           inferredLocation: demo.inferredLocation,
           detectedLanguage: demo.detectedLanguage,
-          interests: demo.interests
+          interests: demo.interests,
         },
         content: customText,
         timestamp: new Date().toISOString(),
-        likes: 1,
+        likes: 0,
         shares: 0,
         replies: 0,
-        hashtags: ['#LiveIngest'],
-        sentiment
+        hashtags: ['#ManualInjection'],
+        sentiment,
       };
 
       await addPosts([newCustomPost]);
       return NextResponse.json({ success: true, post: newCustomPost });
     }
 
-    // Live Ingest triggers
-    const results: SocialPost[] = [];
+    // ── Build the target list ────────────────────────────────────────────
+    const explicit: { platform: PlatformType; target?: string }[] = Array.isArray(body.targets)
+      ? body.targets
+      : [];
 
-    // 1. Reddit Public Ingestion
-    const redditPosts = await fetchLiveRedditPosts(subreddit, 10);
-    results.push(...redditPosts);
-
-    // 2. YouTube Ingestion (if videoId provided or key present)
-    if (videoId) {
-      const ytPosts = await fetchLiveYouTubeComments(videoId, 5);
-      results.push(...ytPosts);
+    // Map the per-platform shorthands onto the same structure.
+    const shorthands: [PlatformType, unknown][] = [
+      ['reddit', body.subreddit],
+      ['youtube', body.videoId ?? body.youtubeQuery],
+      ['telegram', body.telegramChannel],
+      ['x', body.xQuery ?? body.xHandle],
+      ['instagram', body.instagramTag],
+      ['facebook', body.facebookPageId],
+    ];
+    for (const [p, value] of shorthands) {
+      if (typeof value === 'string' && value.trim()) {
+        explicit.push({ platform: p, target: value.trim() });
+      }
     }
 
-    // 3. Telegram public channel (Essential platform per the problem statement)
-    let telegramSource: string | undefined;
-    if (telegramChannel) {
-      const tg = await fetchTelegramPosts(telegramChannel, 20);
-      results.push(...tg.posts);
-      telegramSource = tg.source;
-    }
+    const limit = Math.min(Number(body.limit) || 25, 100);
 
-    // Score everything through the transformer service where available.
-    const analyzed = await enrichPosts(results);
-    await addPosts(analyzed);
+    const outcome =
+      explicit.length > 0
+        ? await ingestFrom(explicit, limit)
+        : await ingestFromAllConfigured({}, limit);
+
+    await addPosts(outcome.posts);
 
     return NextResponse.json({
       success: true,
-      ingestedCount: analyzed.length,
-      // Report the platforms that actually yielded posts, not the ones we
-      // attempted. Reddit currently 403s, and listing it regardless made a
-      // failed ingest look like a successful multi-platform one.
-      platforms: Array.from(new Set(analyzed.map((p) => p.platform))),
-      attempted: [
-        'reddit',
-        ...(videoId ? ['youtube'] : []),
-        ...(telegramChannel ? ['telegram'] : []),
-      ],
-      telegramSource,
-      totalInStore: (await getAllPosts()).length
+      ingestedCount: outcome.posts.length,
+      // Only platforms that actually produced posts.
+      platforms: outcome.succeeded,
+      // Everything attempted, with the reason each empty one was empty, so a
+      // failed ingest is never mistaken for a quiet one.
+      results: outcome.results.map((r) => ({
+        platform: r.platform,
+        status: r.status,
+        count: r.posts.length,
+        source: r.source,
+        note: r.note,
+      })),
+      configuredPlatforms: activePlatforms(),
+      totalPlatformsImplemented: CONNECTORS.length,
+      totalInStore: (await getAllPosts()).length,
     });
   } catch (error: any) {
     console.error('Ingestion API Error:', error);

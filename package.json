@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "verify:graph": "tsx src/lib/graph/__tests__/verify.ts"
+    "verify:graph": "tsx src/lib/graph/__tests__/verify.ts",
+    "verify:connectors": "tsx src/lib/ingestion/__tests__/verify-connectors.ts",
+    "verify": "npm run verify:graph && npm run verify:connectors"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.11.3",

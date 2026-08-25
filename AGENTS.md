@@ -26,11 +26,29 @@
 ingestion with a time-stamped historical database. The problem statement ranks
 the platforms explicitly, and this ranking drives our priorities:
 
-| Tier | Platforms | Our status |
-| :--- | :--- | :--- |
-| **Essentials (Must-Have)** | **X (Twitter)**, **Telegram** | Telegram ✅ live · X ❌ **not implemented** |
-| Desirable (Good-to-Have) | Instagram, Facebook | ❌ not implemented |
-| Appreciable Additions | Reddit, YouTube | Reddit ✅ live · YouTube ✅ (needs API key) |
+**All six platforms have working connectors** in `src/lib/ingestion/`. None is
+simulated. Whether one is *live* depends only on whether its credentials are
+present — check `/api/platforms` for the runtime truth.
+
+| Tier | Platform | Connector | Credentials | Cost |
+| :--- | :--- | :--- | :--- | :--- |
+| **Essential** | **X (Twitter)** | `x.ts` — API v2 | `X_BEARER_TOKEN` | **paid (~$100/mo)** |
+| **Essential** | **Telegram** | `telegram.ts` | none for public channels | **free — live now** |
+| Desirable | Instagram | `instagram.ts` — Graph API | `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_BUSINESS_ID` | free |
+| Desirable | Facebook | `facebook.ts` — Graph API | `FACEBOOK_PAGE_ACCESS_TOKEN`, `FACEBOOK_PAGE_ID` | free |
+| Appreciable | Reddit | `reddit.ts` — OAuth2 | `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` | free (~2 min) |
+| Appreciable | YouTube | `youtube.ts` — Data API v3 | `YOUTUBE_API_KEY` | free (~5 min) |
+
+Access reality, all verified 2026-08-25 — **every unauthenticated route is now
+closed except Telegram's**:
+- Reddit's public JSON gateway returns **403**; old.reddit.com redirects to login.
+- X syndication returns **200 with an empty body**; v2 returns 401 without a token.
+- Instagram `?__a=1` no longer returns JSON; `web_profile_info` 429s; the Basic
+  Display API was retired in Dec 2024.
+- Facebook Graph answers `(#200) Provide valid app ID` to anonymous callers.
+- YouTube Data API returns 403 without a key.
+
+Setup for every platform: `docs/platform-setup.md`.
 
 **B. Multi-Dimensional Sentiment Inference.** NLP for nuanced emotions
 (sarcasm, anxiety, excitement, supportive, against), tracked along the timeline.
@@ -161,17 +179,29 @@ the numbers instead of trusting them.
 ## 6. How the five components are implemented
 
 ### A — Ingestion & Timeline
-`src/lib/ingestion/`, `src/app/api/{ingest,analyze/page}/route.ts`
+`src/lib/ingestion/`, `src/app/api/{ingest,analyze/page,platforms}/route.ts`
 
-* **Reddit** — public `.json` gateway, no credentials. Fully working.
-* **Telegram** — two routes: the `t.me/s/<channel>` public web preview (works
-  for any public channel, no credentials) and the Bot API (only reads chats the
-  bot was added to). Full history needs MTProto; see §9.
-* **YouTube** — Data API v3 comment threads; skipped without `YOUTUBE_API_KEY`.
-* **X, Instagram, Facebook** — **not implemented.** See §9.
-* Timestamps are normalised to ISO-8601. All analytics routes accept
-  `?cutoffTime=` for timeline replay, and drop unparseable timestamps rather
-  than letting `NaN` propagate.
+Every connector implements the same `Connector` interface (`types.ts`) and is
+registered in `registry.ts`. Connectors run in **parallel and fault-isolated**:
+one platform being unconfigured, rate-limited, or down never stops the others.
+
+**The honesty rule for ingestion:** a connector that returns no posts must say
+*why*. `ConnectorStatus` distinguishes `missing-credentials`, `unauthorized`,
+`rate-limited`, `not-found`, `blocked`, and `error`, so "not configured" is
+never rendered as "no activity". A connector must NEVER return fabricated posts
+— `npm run verify:connectors` asserts exactly this.
+
+* **Telegram** — `t.me/s/<channel>` preview (no credentials) + Bot API.
+* **X** — API v2 user timeline and recent search. Real reply edges via
+  `in_reply_to_user_id`.
+* **Instagram** — own-account media + comments, and `#hashtag` search.
+* **Facebook** — Page feed + comments, with real reply edges.
+* **Reddit** — OAuth2 `client_credentials`, token cached on `globalThis`.
+* **YouTube** — accepts a video, an `@channel`, or a search phrase.
+
+Timestamps are normalised to ISO-8601. All analytics routes accept
+`?cutoffTime=` for timeline replay, and drop unparseable timestamps rather than
+letting `NaN` propagate.
 
 ### B — Sentiment & Emotion
 `ml/` (primary) → `src/lib/nlp/emotionEngine.ts` (fallback)
@@ -239,6 +269,7 @@ See `.env.example`. Two that matter most:
 # Dashboard
 npm install && npm run dev            # http://localhost:3000
 npx tsc --noEmit                      # type check
+npm run verify                        # graph algorithms + connector contracts
 npm run build
 
 # ML service (first run downloads ~2 GB of weights)
@@ -257,9 +288,11 @@ pytest                                # test suite
 
 Ordered by scoring impact against the problem statement.
 
-1. **X (Twitter) ingestion — not implemented.** An Essential platform. Blocked
-   on API cost (Basic tier ~$100/mo). Alternatives: a documented sample-corpus
-   mode, or academic access. **Do not mock it and present it as live.**
+1. **Credentials not yet provisioned.** All six connectors are implemented, but
+   only Telegram is live. Reddit (~2 min) and YouTube (~5 min) are free and
+   should be done first; Instagram and Facebook next; X requires paying for the
+   Basic tier. See `docs/platform-setup.md`. **Never mock a platform to make it
+   look live** — `npm run verify:connectors` guards this.
 2. **Demographic profiling has no ML** (Component C). Regex only. Needs a real
    model, or at minimum an honest accuracy measurement.
 3. **Stance classification is heuristic.** The PS names "supportive, against"
@@ -269,7 +302,8 @@ Ordered by scoring impact against the problem statement.
    another chart, and no competing team will have one.
 5. **ML service not deployed.** `Dockerfile` and `render.yaml` are ready.
    Until it is deployed, production runs the lexicon fallback.
-6. **Instagram / Facebook** — not implemented (Desirable tier).
+6. **Facebook cannot read third-party Pages** without Meta App Review and
+   business verification (weeks). It reads Pages the token administers.
 7. **MTProto Telegram** for full channel history — needs a one-time
    interactive login to mint `TELEGRAM_SESSION`.
 8. **No SSE/WebSocket streaming.** The dashboard polls.
