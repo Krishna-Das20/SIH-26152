@@ -149,12 +149,39 @@ function commentToPost(
     // Every comment is a real reply edge to the uploader.
     inReplyToPostId: `yt_video_${videoId}`,
     inReplyToAuthorId: videoOwnerId ? `usr_yt_${videoOwnerId}` : undefined,
-    hashtags: extractHashtags(text).length
-      ? extractHashtags(text)
-      : [`#${(videoTitle || 'youtube').replace(/[^a-zA-Z0-9]/g, '').slice(0, 24) || 'youtube'}`],
+    // Topic label for a comment with no hashtags of its own: derive it from the
+    // video title. Stripping every non-alphanumeric produced unreadable runs
+    // like "#PrashantDhawanSir39sScie", so words are kept and capped instead.
+    hashtags: extractHashtags(text).length ? extractHashtags(text) : [videoTopicTag(videoTitle)],
     mentionedUsernames: extractMentions(text),
     sentiment,
   };
+}
+
+/**
+ * Converts a video title into a short, readable topic tag.
+ * Keeps whole words rather than stripping punctuation from the whole string,
+ * which previously truncated mid-word into unreadable labels.
+ */
+function videoTopicTag(title: string): string {
+  const STOP = new Set([
+    'the', 'a', 'an', 'and', 'or', 'of', 'in', 'to', 'for', 'on', 'with', 'is',
+    'how', 'what', 'why', 'best', 'full', 'new', 'part', 'video', 'course',
+    'shorts', 'live', 'ep', 'episode', 'hindi', 'english',
+  ]);
+
+  // Decode entities FIRST: YouTube returns titles containing &#39; and &amp;,
+  // and stripping punctuation afterwards leaves the numeric part behind, which
+  // produced labels like "#39IndiaSemiconductorMission".
+  const words = cleanText(title || '')
+    .replace(/[|:\-–—#@]/g, ' ')
+    .split(/\s+/)
+    .map((w) => w.replace(/[^\p{L}\p{N}]/gu, ''))
+    .filter((w) => w.length > 2 && !STOP.has(w.toLowerCase()))
+    .slice(0, 3);
+
+  if (words.length === 0) return '#youtube';
+  return `#${words.map((w) => w[0].toUpperCase() + w.slice(1)).join('')}`;
 }
 
 function parseVideoId(input: string): string | null {

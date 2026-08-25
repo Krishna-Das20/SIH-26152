@@ -5,6 +5,7 @@ import { Navbar } from '@/components/Navbar';
 import { OverviewMetrics } from '@/components/OverviewMetrics';
 import { PageAnalyzerInput } from '@/components/PageAnalyzerInput';
 import { PlatformStatusPanel } from '@/components/PlatformStatusPanel';
+import { AudienceIntelligenceBrief } from '@/components/AudienceIntelligenceBrief';
 import { TimelineScrubber } from '@/components/TimelineScrubber';
 import { NetworkGraphView } from '@/components/NetworkGraphView';
 import { SentimentEmotionView } from '@/components/SentimentEmotionView';
@@ -209,6 +210,10 @@ export default function Dashboard() {
 
         {/* 3. Real Target Page / Channel OSINT Scraper (Zero Dummy Data) */}
         <PageAnalyzerInput onAnalyzeSuccess={() => fetchAnalytics()} />
+
+        {/* The fusion layer the problem statement calls "the key" — placed first
+            because a combined finding is the headline, not a supporting detail. */}
+        <AudienceIntelligenceBrief cutoffTime={currentTime} platform={activePlatform} />
 
         {/* Component A: honest, runtime-checked coverage of all six platforms */}
         <PlatformStatusPanel />

@@ -1,5 +1,6 @@
 import { SocialPost } from '@/types/intelligence';
 import { generateFullIntelligenceDataset } from '@/lib/demoData';
+import frozenCorpus from '@/lib/frozenCorpus.json';
 import type { Db } from 'mongodb';
 import { getDatabase } from '@/lib/mongodb';
 import { enrichPosts } from '@/lib/ml/client';
@@ -20,9 +21,47 @@ declare global {
   var _baselineEnriched: boolean | undefined;
 }
 
+/**
+ * The demo baseline.
+ *
+ * Prefers `frozenCorpus.json` — a real, already-ML-scored snapshot captured
+ * from YouTube and Telegram by `scripts/freeze-corpus.mjs`. Using it means the
+ * demo shows genuine data with ZERO network dependency: no venue wi-fi, no live
+ * API, no daily quota. (YouTube allows 10,000 quota units/day and search.list
+ * costs 100, so a morning of rehearsals can exhaust it before judging starts.)
+ *
+ * Falls back to the synthetic generator only when no snapshot is present.
+ */
+function baseline(): SocialPost[] {
+  const frozen = (frozenCorpus as { posts?: SocialPost[] })?.posts;
+  if (Array.isArray(frozen) && frozen.length > 0) {
+    return frozen as SocialPost[];
+  }
+  return generateFullIntelligenceDataset();
+}
+
+/** Provenance of the demo baseline, surfaced so the UI can label it honestly. */
+export function baselineInfo(): {
+  source: 'frozen-snapshot' | 'synthetic';
+  capturedAt?: string;
+  postCount: number;
+  platforms?: Record<string, number>;
+} {
+  const f = frozenCorpus as any;
+  if (Array.isArray(f?.posts) && f.posts.length > 0) {
+    return {
+      source: 'frozen-snapshot',
+      capturedAt: f.capturedAt,
+      postCount: f.postCount ?? f.posts.length,
+      platforms: f.platforms,
+    };
+  }
+  return { source: 'synthetic', postCount: generateFullIntelligenceDataset().length };
+}
+
 function cache(): SocialPost[] {
   if (!global._postsCache) {
-    global._postsCache = generateFullIntelligenceDataset();
+    global._postsCache = baseline();
   }
   return global._postsCache;
 }
@@ -42,6 +81,11 @@ function cache(): SocialPost[] {
 async function enrichBaselineOnce(): Promise<void> {
   if (global._baselineEnriched) return;
   global._baselineEnriched = true;
+
+  // A frozen snapshot was already scored at capture time. Re-scoring it would
+  // add a startup stall and make the demo depend on the ML service being up.
+  if (baselineInfo().source === 'frozen-snapshot') return;
+
   try {
     const current = cache();
     const enriched = await enrichPosts(current);
@@ -148,7 +192,7 @@ export async function addPosts(newPosts: SocialPost[]): Promise<void> {
  * prefers a non-empty database, "reset" appeared to do nothing at all.
  */
 export async function resetDataset(): Promise<SocialPost[]> {
-  global._postsCache = generateFullIntelligenceDataset();
+  global._postsCache = baseline();
   global._baselineEnriched = false; // re-score the fresh baseline
 
   const db = await getDatabase();
