@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: "SIH26-26152 • AI-Driven Social Media Analytics Framework",
@@ -14,7 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="antialiased bg-[#07090e] text-slate-100 min-h-screen">
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

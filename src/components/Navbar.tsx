@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Shield, Activity, RefreshCw, Radio, Database, Sparkles, AlertTriangle } from 'lucide-react';
-import { PlatformType } from '@/types/intelligence';
+import { Shield, RefreshCw, LogIn, LogOut, User, Sparkles } from 'lucide-react';
+import { useSession, signOut } from 'next-auth/react';
+import Link from 'next/link';
 
 interface NavbarProps {
   activePlatform: string;
@@ -21,6 +22,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isLoading,
   threatLevel
 }) => {
+  const { data: session } = useSession();
   const [subredditInput, setSubredditInput] = useState('india');
 
   const platforms = [
@@ -75,26 +77,40 @@ export const Navbar: React.FC<NavbarProps> = ({
           ))}
         </div>
 
-        {/* Action Controls & Live Ingestion Trigger */}
+        {/* User Auth & Actions */}
         <div className="flex items-center gap-3">
-          {/* Live Ingestion Input */}
-          <div className="hidden lg:flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1">
-            <span className="text-xs text-slate-400">r/</span>
-            <input
-              type="text"
-              value={subredditInput}
-              onChange={(e) => setSubredditInput(e.target.value)}
-              placeholder="india"
-              className="bg-transparent text-xs text-white focus:outline-none w-20"
-            />
-            <button
-              onClick={() => onTriggerIngestion(subredditInput)}
-              disabled={isLoading}
-              className="text-xs bg-cyan-600 hover:bg-cyan-500 text-white px-2 py-0.5 rounded font-medium disabled:opacity-50 transition-all"
+          {session?.user ? (
+            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg p-1 pr-2.5">
+              <img
+                src={session.user.image || `https://api.dicebear.com/7.x/bottts/svg?seed=${session.user.email}`}
+                alt="Avatar"
+                className="w-6 h-6 rounded-full border border-cyan-500/40"
+              />
+              <div className="text-left hidden sm:block">
+                <div className="text-xs font-bold text-white leading-none font-mono">
+                  {session.user.name || session.user.email?.split('@')[0]}
+                </div>
+                <div className="text-[9px] text-cyan-400 font-mono uppercase">
+                  {(session.user as any).role || 'Analyst'}
+                </div>
+              </div>
+              <button
+                onClick={() => signOut()}
+                title="Sign Out"
+                className="ml-1 p-1 text-slate-400 hover:text-rose-400 transition-all"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/auth/signin"
+              className="px-3 py-1.5 bg-intel-cyan hover:bg-cyan-400 text-black font-bold text-xs rounded-lg flex items-center gap-1.5 transition-all shadow-sm"
             >
-              Fetch Live
-            </button>
-          </div>
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In</span>
+            </Link>
+          )}
 
           <button
             onClick={onResetDataset}
