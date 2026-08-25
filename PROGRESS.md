@@ -93,6 +93,27 @@ re-testing these:
 
 ---
 
+## 4b. Deployed site (Vercel)
+
+`https://sih-26152.vercel.app` serves the same frozen corpus — identical
+analysis, Q = 0.83, all 5 findings — because `frozenCorpus.json` is committed.
+
+Two deliberate differences from local:
+
+- **No `YOUTUBE_API_KEY`** there, so it reports 1/6 platforms live. Existing
+  YouTube data displays fine; new YouTube ingestion is unavailable.
+- **No `PUBLIC_INGEST`**, so `/api/ingest` and `/api/analyze/page` require a
+  session. Reads stay open — a judge sees the whole dashboard without an account.
+
+**Set `SINGLE_TENANT_MODE=true` on Vercel.** Without it a visitor who signs in
+flips from `demo` to `tenant` mode and sees an EMPTY dashboard, because a new
+user has no connected accounts.
+
+Use Vercel as the backup demo. Prefer localhost, because Vercel cannot reach the
+ML service on `127.0.0.1`, so new ingestion there falls back to the lexicon.
+
+---
+
 ## 5. Demo corpus
 
 `src/lib/frozenCorpus.json` — **201 real posts** (161 YouTube + 40 Telegram),
@@ -153,7 +174,8 @@ Required in `.env` (gitignored — never commit it):
 | :-- | :-- |
 | `MONGODB_URI` | persistence (optional; falls back to memory) |
 | `NEXTAUTH_SECRET` | **required**, ≥32 chars, app refuses to start without it |
-| `YOUTUBE_API_KEY` | YouTube ingestion — **configured** |
+| `YOUTUBE_API_KEY` | YouTube ingestion — **configured locally**, not on Vercel |
+| `PUBLIC_INGEST` | `true` locally so the demo needs no login. **Never set on Vercel** — ingestion spends our YouTube quota and the URL is public |
 | `SINGLE_TENANT_MODE` | `true` for the demo |
 | `ML_API_URL` | defaults to `http://127.0.0.1:8000` |
 | `TOKEN_ENCRYPTION_KEY` | multi-tenant mode only |
@@ -204,7 +226,10 @@ judge who catches an invented number discounts everything else.
 3. **Never mock a platform to make it look live.** An honest gap beats a fake.
 4. **Tenant reads go through `src/lib/tenant.ts`.** Calling `getAllPosts()`
    directly in an analytics route is a cross-tenant data leak.
-5. **Update this file before pushing.**
+5. **Reads open, writes guarded.** Ingestion routes spend real third-party
+   quota, so they require a session unless `PUBLIC_INGEST=true`. Do not remove
+   the guard to make a deployment "just work".
+6. **Update this file before pushing.**
 
 ---
 

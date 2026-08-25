@@ -3,6 +3,7 @@ import { PlatformType } from '@/types/intelligence';
 import { addPosts, getAllPosts } from '@/lib/store';
 import { enrichPosts } from '@/lib/ml/client';
 import { getConnector, inferPlatform, describeCapabilities } from '@/lib/ingestion/registry';
+import { guardIngest } from '@/lib/guard';
 
 /**
  * Target analyzer: point it at any account, channel, subreddit, hashtag, video
@@ -15,6 +16,10 @@ import { getConnector, inferPlatform, describeCapabilities } from '@/lib/ingesti
  * silently answered Telegram requests with Reddit search results.)
  */
 export async function POST(req: Request) {
+  // Writes spend real third-party quota; reads stay open.
+  const guard = await guardIngest();
+  if (!guard.allowed) return guard.response!;
+
   try {
     const body = await req.json().catch(() => ({} as any));
     const rawTarget: string = (body.targetUrlOrHandle ?? body.target ?? '').toString().trim();

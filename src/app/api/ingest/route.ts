@@ -10,6 +10,7 @@ import {
   activePlatforms,
   CONNECTORS,
 } from '@/lib/ingestion/registry';
+import { guardIngest } from '@/lib/guard';
 
 /**
  * Multi-platform ingestion trigger (Component A).
@@ -24,6 +25,10 @@ import {
  *   { subreddit, videoId, telegramChannel, xQuery, instagramTag, facebookPageId }
  */
 export async function POST(req: Request) {
+  // Writes spend real third-party quota; reads stay open.
+  const guard = await guardIngest();
+  if (!guard.allowed) return guard.response!;
+
   try {
     const body = await req.json().catch(() => ({} as any));
     const { action, platform, customText } = body;
