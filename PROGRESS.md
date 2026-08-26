@@ -95,10 +95,11 @@ credentials. Check at runtime: `GET /api/platforms`.
 | YouTube | Appreciable | 🟢 **live** | none — API key configured |
 | Instagram | Desirable | 🟢 **live** | none — configured with `@bbsrgotlatent` |
 | Facebook | Desirable | 🟢 **live** | none — configured with `BBSR Got Laytent` Page |
-| Reddit | Appreciable | 🔴 needs app | free "script" app at reddit.com/prefs/apps (~2 min) |
+| Reddit | Appreciable | 🔴 blocked on review | Gated by Responsible Builder Policy; Devvit RFC in `docs/devvit-integration.md` |
 | X (Twitter) | Essential | 🔴 needs funding | pay-per-call since Feb 2026, ~$24/mo at demo volume |
 
 Setup for each: [`docs/platform-setup.md`](docs/platform-setup.md).
+Devvit Alternative Architecture: [`docs/devvit-integration.md`](docs/devvit-integration.md).
 Commercial/multi-tenant credentials: [`docs/commercial-setup.md`](docs/commercial-setup.md).
 
 ### Verified access reality (2026-08-25)
