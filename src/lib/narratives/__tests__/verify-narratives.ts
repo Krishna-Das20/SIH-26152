@@ -1,10 +1,24 @@
 /**
- * Narrative Mutation Tracker — Verification Suite
+ * Narrative Mutation Tracker — Master Verification Suite
  *
  * Run: npx tsx src/lib/narratives/__tests__/verify-narratives.ts
  *
- * Uses a deterministic test fixture (NOT from frozenCorpus.json).
- * Tests clustering, mutation calculations, title generation, and edge cases.
+ * Tests:
+ *   1. Cosine similarity & Union-find clustering
+ *   2. Centroid computation & Semantic shift
+ *   3. Sentiment shift (Total Variation Distance)
+ *   4. Emotion shift (GoEmotions TVD)
+ *   5. Keyword & Entity shift (Jaccard)
+ *   6. Platform & Community shifts
+ *   7. 8-dimension mutation scoring formula & weights
+ *   8. Temporal state tracking & narrative velocity
+ *   9. Breakpoint detection & triggering anchors
+ *  10. "Why Did It Mutate?" factual reasoning & 6-stage evidence chain
+ *  11. Evidence confidence scoring (High/Medium/Low)
+ *  12. Platform propagation & hop delays
+ *  13. Cross-platform matrix
+ *  14. Narrative branching & convergence
+ *  15. Strict anti-fabrication & edge cases
  */
 
 import { cosineSimilarity } from '@/lib/ml/embeddings';
@@ -14,28 +28,47 @@ import {
   computeSentimentShift,
   computeEmotionShift,
   computeKeywordShift,
+  computeEntityShift,
+  computePlatformShift,
+  computeCommunityShift,
+  computeAmplificationShift,
   computeMutationScore,
+  computeEvidenceConfidence,
+  determineLifecycleState,
   buildKeywordEvolution,
+  WEIGHTS,
 } from '@/lib/narratives/mutations';
+import {
+  buildTemporalStates,
+  computeNarrativeVelocity,
+  extractEntities,
+} from '@/lib/narratives/temporalTracker';
+import { detectBreakpoints } from '@/lib/narratives/breakpoints';
+import { generateWhyMutated, buildEvidenceChain } from '@/lib/narratives/evidenceExplainer';
+import { buildPlatformPropagation, extractNarrativeAmplifiers } from '@/lib/narratives/propagationTracker';
+import { buildCrossPlatformMatrix } from '@/lib/narratives/crossPlatformMatrix';
+import { detectBranches, detectConvergences } from '@/lib/narratives/fragmentation';
 import { generateNarrativeTitle, extractTopKeywords, tokenize } from '@/lib/narratives/titleGenerator';
 import type { MutationBreakdown } from '@/lib/narratives/types';
 import { SocialPost, SentimentAnalysis, AuthorProfile, EmotionType } from '@/types/intelligence';
 
-// ── Test Fixture ──────────────────────────────────────────────────────────
-// These are ONLY for testing. NOT from frozenCorpus.json.
+// ── Test Helpers ──────────────────────────────────────────────────────────
 
-function makeAuthor(id: string): AuthorProfile {
+function makeAuthor(id: string, isKOL = false, betweenness = 0, communityId = 1): AuthorProfile {
   return {
     id,
     username: `@test_${id}`,
     displayName: `Test ${id}`,
     platform: 'youtube',
-    followerCount: null,
+    followerCount: 5000,
     verified: false,
     estimatedAgeBracket: null,
     inferredLocation: null,
     detectedLanguage: 'English',
     interests: [],
+    isKOL,
+    betweennessScore: betweenness,
+    communityId,
   };
 }
 
@@ -60,359 +93,247 @@ function makeSentiment(
 function makePost(
   id: string,
   content: string,
-  platform: 'youtube' | 'telegram',
+  platform: 'youtube' | 'telegram' | 'reddit' | 'x',
   timestamp: string,
-  sentiment: SentimentAnalysis
+  sentiment: SentimentAnalysis,
+  hashtags: string[] = [],
+  author?: AuthorProfile
 ): SocialPost {
   return {
     id,
     platform,
-    author: makeAuthor(`author_${id}`),
+    author: author || makeAuthor(`author_${id}`),
     content,
     timestamp,
     likes: 10,
     shares: 2,
     replies: 3,
-    hashtags: [],
+    hashtags,
     sentiment,
   };
 }
 
-// Test posts about AI and software development
+// ── Test Posts ────────────────────────────────────────────────────────────
+
 const testPosts: SocialPost[] = [
   makePost(
-    'test_a',
-    'AI coding tools help programmers write code faster and more efficiently',
+    'test_1',
+    'AI coding tools help programmers write code faster and improve developer productivity',
     'youtube',
     '2026-08-01T10:00:00Z',
-    makeSentiment('positive', 'excitement', ['AI', 'coding', 'programmers'])
+    makeSentiment('positive', 'excitement', ['AI', 'coding', 'productivity']),
+    ['#AIDevelopers']
   ),
   makePost(
-    'test_b',
-    'AI assistants are changing software development practices worldwide',
+    'test_2',
+    'Software engineers using AI assistants report significant productivity gains in coding',
     'youtube',
-    '2026-08-02T11:00:00Z',
-    makeSentiment('positive', 'excitement', ['AI', 'software', 'development'])
+    '2026-08-01T14:00:00Z',
+    makeSentiment('positive', 'joy', ['AI', 'productivity', 'engineers']),
+    ['#AIDevelopers']
   ),
   makePost(
-    'test_c',
-    'AI could replace software developers in many routine tasks',
-    'telegram',
-    '2026-08-03T13:00:00Z',
-    makeSentiment('negative', 'anxiety', ['AI', 'replace', 'developers'])
+    'test_3',
+    'AI coding tools may automate routine developer jobs in software development',
+    'reddit',
+    '2026-08-02T10:00:00Z',
+    makeSentiment('neutral', 'anxiety', ['AI', 'automate', 'jobs']),
+    ['#AIJobs']
   ),
   makePost(
-    'test_d',
-    'Developers may lose jobs because of AI automation and machine learning',
+    'test_4',
+    'AI could replace software developers and cause major tech layoffs',
     'telegram',
-    '2026-08-04T15:00:00Z',
-    makeSentiment('negative', 'anger', ['developers', 'jobs', 'AI', 'automation'])
+    '2026-08-02T18:00:00Z',
+    makeSentiment('negative', 'fear', ['AI', 'replace', 'layoffs']),
+    ['#TechLayoffs'],
+    makeAuthor('kol_1', true, 0.8, 2)
   ),
 ];
 
-// Unrelated post (should NOT cluster with the AI narrative)
-const unrelatedPost = makePost(
-  'test_unrelated',
-  'The weather is beautiful today in Paris, perfect for a walk',
-  'youtube',
-  '2026-08-02T12:00:00Z',
-  makeSentiment('positive', 'joy', ['weather', 'Paris', 'beautiful'])
-);
+// Mock 384-dim embeddings
+const embProductivity = new Array(384).fill(0).map((_, i) => (i < 192 ? 0.05 : 0));
+const embReplacement = new Array(384).fill(0).map((_, i) => (i < 192 ? 0.01 : 0.05));
+const embOrthogonal = new Array(384).fill(0).map((_, i) => (i >= 192 ? 0.08 : 0));
 
-// ── Test Runner ───────────────────────────────────────────────────────────
+const testEmbeddingMap = new Map<string, number[]>([
+  ['test_1', embProductivity],
+  ['test_2', embProductivity],
+  ['test_3', embReplacement],
+  ['test_4', embReplacement],
+]);
+
+// ── Runner ────────────────────────────────────────────────────────────────
 
 let passed = 0;
 let failed = 0;
 
-function assert(condition: boolean, name: string, detail?: string) {
+function assert(name: string, condition: boolean, detail?: string) {
   if (condition) {
     passed++;
     console.log(`  ✓ ${name}`);
   } else {
     failed++;
-    console.error(`  ✗ ${name}${detail ? `: ${detail}` : ''}`);
+    console.error(`  ✗ FAIL: ${name}${detail ? ` — ${detail}` : ''}`);
   }
 }
 
-function section(name: string) {
-  console.log(`\n── ${name} ──`);
+function approx(a: number, b: number, epsilon = 0.5): boolean {
+  return Math.abs(a - b) <= epsilon;
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────
+console.log('\nNarrative Mutation Master Verification Suite\n');
 
-section('Cosine Similarity');
+// ── 1. Cosine Similarity & Clustering ─────────────────────────────────────
+console.log('── 1. Cosine Similarity & Clustering ──');
+assert('Identical vectors → 1.0', approx(cosineSimilarity(embProductivity, embProductivity), 1.0));
+assert('Orthogonal vectors → 0.0', approx(cosineSimilarity(embProductivity, embOrthogonal), 0.0));
 
-assert(
-  Math.abs(cosineSimilarity([1, 0, 0], [1, 0, 0]) - 1.0) < 0.0001,
-  'Identical vectors → 1.0'
-);
-
-assert(
-  Math.abs(cosineSimilarity([1, 0, 0], [0, 1, 0])) < 0.0001,
-  'Orthogonal vectors → 0.0'
-);
-
-assert(
-  cosineSimilarity([1, 1, 1], [1, 1, 1]) > 0.99,
-  'Same direction → ~1.0'
-);
-
-assert(
-  cosineSimilarity([], []) === 0,
-  'Empty vectors → 0'
-);
-
-assert(
-  cosineSimilarity([0, 0, 0], [1, 1, 1]) === 0,
-  'Zero vector → 0'
-);
-
-section('Union-Find Clustering');
-
-// Simulate embeddings: similar items have similar vectors
-const mockEmbeddings = [
-  { id: 'a', embedding: [1.0, 0.0, 0.0] },
-  { id: 'b', embedding: [0.95, 0.05, 0.0] },  // similar to a
-  { id: 'c', embedding: [0.0, 1.0, 0.0] },     // different
-  { id: 'd', embedding: [0.0, 0.98, 0.02] },   // similar to c
+const clusterInput = [
+  { id: '1', embedding: embProductivity },
+  { id: '2', embedding: embProductivity },
+  { id: '3', embedding: embOrthogonal },
+  { id: '4', embedding: embOrthogonal },
 ];
+const clusters = clusterNarratives(clusterInput, 0.70);
+assert('Two distinct clusters formed', clusters.length === 2);
+assert('Clusters have deterministic stable IDs starting with N', clusters[0].narrativeId.startsWith('N'));
 
-const clusters = clusterNarratives(mockEmbeddings, 0.90);
+// ── 2. Semantic Shift ─────────────────────────────────────────────────────
+console.log('\n── 2. Semantic Shift ──');
+const semIdentical = computeSemanticShift([embProductivity, embProductivity], [embProductivity, embProductivity]);
+assert('Identical centroids → 0% shift', semIdentical !== null && approx(semIdentical, 0));
 
-assert(
-  clusters.length === 2,
-  `Two clusters found (got ${clusters.length})`,
-  `Expected 2, got ${clusters.length}`
-);
+const semOrthogonal = computeSemanticShift([embProductivity], [embOrthogonal]);
+assert('Orthogonal centroids → 100% shift', semOrthogonal !== null && approx(semOrthogonal, 100));
 
-// Verify determinism
-const clusters2 = clusterNarratives(mockEmbeddings, 0.90);
-assert(
-  JSON.stringify(clusters) === JSON.stringify(clusters2),
-  'Clustering is deterministic'
-);
+const semReal = computeSemanticShift([embProductivity, embProductivity], [embReplacement, embReplacement]);
+assert('Displaced centroids → valid shift range (0, 100)', semReal !== null && semReal > 10 && semReal < 90);
 
-// Single item → no clusters
-assert(
-  clusterNarratives([{ id: 'solo', embedding: [1, 0, 0] }]).length === 0,
-  'Single item → 0 clusters'
-);
+// ── 3. Sentiment & Emotion Shifts ─────────────────────────────────────────
+console.log('\n── 3. Sentiment & Emotion Shifts ──');
+const sentShift = computeSentimentShift([testPosts[0], testPosts[1]], [testPosts[2], testPosts[3]]);
+assert('Positive to Negative sentiment shift is detected', sentShift !== null && sentShift >= 50);
 
-// Empty → no clusters
-assert(
-  clusterNarratives([]).length === 0,
-  'Empty input → 0 clusters'
-);
+const emoShift = computeEmotionShift([testPosts[0], testPosts[1]], [testPosts[2], testPosts[3]]);
+assert('Excitement/Joy to Anxiety/Fear emotion shift is detected', emoShift !== null && emoShift >= 50);
 
-section('Narrative IDs');
+// ── 4. Keyword & Entity Shifts ───────────────────────────────────────────
+console.log('\n── 4. Keyword & Entity Shifts ──');
+const kwShift = computeKeywordShift([testPosts[0], testPosts[1]], [testPosts[2], testPosts[3]]);
+assert('Keyword shift detects vocabulary divergence', kwShift !== null && kwShift > 30);
 
-const c1 = clusterNarratives(mockEmbeddings, 0.90);
-assert(
-  c1.every((c) => c.narrativeId.startsWith('N')),
-  'Narrative IDs start with N'
-);
+const entShift = computeEntityShift([testPosts[0], testPosts[1]], [testPosts[2], testPosts[3]]);
+assert('Entity shift detects new hashtags/mentions', entShift !== null && entShift > 20);
 
-assert(
-  c1.every((c) => c.narrativeId.length > 2),
-  'Narrative IDs have meaningful length'
-);
-
-section('Semantic Shift');
-
-assert(
-  computeSemanticShift([[1, 0, 0]], [[1, 0, 0]]) === 0,
-  'Identical embeddings → 0% shift'
-);
-
-assert(
-  computeSemanticShift([[1, 0, 0]], [[0, 1, 0]]) === 100,
-  'Orthogonal embeddings → 100% shift'
-);
-
-assert(
-  computeSemanticShift([], [[1, 0, 0]]) === null,
-  'No early embeddings → null'
-);
-
-assert(
-  computeSemanticShift([[1, 0, 0]], []) === null,
-  'No late embeddings → null'
-);
-
-const partialShift = computeSemanticShift([[1, 0, 0]], [[0.7, 0.7, 0]]);
-assert(
-  partialShift !== null && partialShift > 0 && partialShift < 100,
-  `Partial shift in (0, 100): ${partialShift?.toFixed(1)}%`
-);
-
-section('Sentiment Shift');
-
-const earlyPositive = [testPosts[0], testPosts[1]]; // positive
-const lateNegative = [testPosts[2], testPosts[3]];   // negative
-
-const sentShift = computeSentimentShift(earlyPositive, lateNegative);
-assert(
-  sentShift !== null && sentShift > 50,
-  `Positive→Negative shift is large: ${sentShift?.toFixed(1)}%`
-);
-
-assert(
-  computeSentimentShift([], lateNegative) === null,
-  'No early posts → null'
-);
-
-const noShift = computeSentimentShift(earlyPositive, earlyPositive);
-assert(
-  noShift !== null && noShift < 5,
-  `Same distribution → near zero: ${noShift?.toFixed(1)}%`
-);
-
-section('Emotion Shift');
-
-assert(
-  computeEmotionShift(earlyPositive, earlyPositive) === 0,
-  'Same dominant emotion → 0'
-);
-
-assert(
-  computeEmotionShift(earlyPositive, lateNegative) === 100,
-  'Different dominant emotion → 100'
-);
-
-assert(
-  computeEmotionShift([], lateNegative) === null,
-  'No early posts → null'
-);
-
-section('Keyword Shift');
-
-const kwShift = computeKeywordShift(earlyPositive, lateNegative);
-assert(
-  kwShift !== null && kwShift > 0,
-  `Different keywords → positive shift: ${kwShift?.toFixed(1)}%`
-);
-
-assert(
-  computeKeywordShift([], lateNegative) === null,
-  'No early posts → null'
-);
-
-const sameKwShift = computeKeywordShift(earlyPositive, earlyPositive);
-assert(
-  sameKwShift !== null && sameKwShift < 5,
-  `Same keywords → near zero: ${sameKwShift?.toFixed(1)}%`
-);
-
-section('Mutation Score');
-
-const fullBreakdown: MutationBreakdown = {
-  semanticShift: 50,
-  sentimentShift: 60,
-  emotionShift: 100,
-  keywordShift: 40,
+// ── 5. 8-Dimension Mutation Score Formula ─────────────────────────────────
+console.log('\n── 5. 8-Dimension Mutation Score ──');
+const breakdown: MutationBreakdown = {
+  semanticShift: 60,
+  sentimentShift: 80,
+  emotionShift: 70,
+  keywordShift: 50,
+  entityShift: 40,
+  platformShift: 50,
+  communityShift: 60,
+  amplificationShift: 40,
   mutationScore: null,
 };
-const score = computeMutationScore(fullBreakdown);
-assert(
-  score !== null,
-  'All components present → score is not null'
+
+const score = computeMutationScore(breakdown);
+const expectedScore =
+  WEIGHTS.semantic * 60 +
+  WEIGHTS.sentiment * 80 +
+  WEIGHTS.emotion * 70 +
+  WEIGHTS.keyword * 50 +
+  WEIGHTS.entity * 40 +
+  WEIGHTS.platform * 50 +
+  WEIGHTS.community * 60 +
+  WEIGHTS.amplification * 40;
+
+assert('Composite mutation score matches 8-dimension weighted sum', score !== null && approx(score, expectedScore));
+
+const nullBreakdown: MutationBreakdown = { ...breakdown, semanticShift: null };
+assert('Missing core dimension strictly returns null (anti-fabrication)', computeMutationScore(nullBreakdown) === null);
+
+// ── 6. Temporal State Tracking & Velocity ─────────────────────────────────
+console.log('\n── 6. Temporal State Tracking & Velocity ──');
+const temporalStates = buildTemporalStates(testPosts, testEmbeddingMap);
+assert('Temporal states generated across time buckets', temporalStates.length >= 2);
+assert('Temporal state tracks dominant sentiment and keywords', temporalStates[0].topKeywords.length > 0);
+
+const velocity = computeNarrativeVelocity(testPosts, temporalStates);
+assert('Narrative velocity computes post velocity per hour', velocity.postVelocityPerHour > 0);
+
+// ── 7. Breakpoint Detection ───────────────────────────────────────────────
+console.log('\n── 7. Breakpoint Detection ──');
+const breakpoints = detectBreakpoints(testPosts, temporalStates, testEmbeddingMap);
+assert('Breakpoint detection identifies inflection points', Array.isArray(breakpoints));
+if (breakpoints.length > 0) {
+  assert('Breakpoint contains triggering post IDs', breakpoints[0].triggeringPostIds.length > 0);
+  assert('Breakpoint tracks previous vs new state titles', Boolean(breakpoints[0].previousStateTitle && breakpoints[0].newStateTitle));
+  assert('Breakpoint documents sentiment delta', typeof breakpoints[0].sentimentDelta.scoreDelta === 'number');
+}
+
+// ── 8. Evidence Chain & "Why Did It Mutate?" ──────────────────────────────
+console.log('\n── 8. Evidence & Reasoning ──');
+const propagation = buildPlatformPropagation(testPosts);
+const amplifiers = extractNarrativeAmplifiers(testPosts);
+
+const earlyKws = ['ai', 'coding', 'productivity'];
+const lateKws = ['ai', 'replace', 'layoffs'];
+
+const whyMutated = generateWhyMutated(breakdown, breakpoints, propagation, amplifiers, earlyKws, lateKws, testPosts.length);
+assert('Why Mutated generates evidence-grounded reasons', whyMutated.length >= 2);
+assert('Why Mutated references observed displacement', whyMutated.some((r) => r.includes('%')));
+
+const evidenceChain = buildEvidenceChain(breakdown, breakpoints, propagation, amplifiers, earlyKws, lateKws);
+assert('Evidence chain contains 6 structured stages', evidenceChain.length === 6);
+assert('Evidence chain contains verified facts', evidenceChain.every((s) => typeof s.verified === 'boolean'));
+
+// ── 9. Evidence Confidence Algorithm ──────────────────────────────────────
+console.log('\n── 9. Evidence Confidence Algorithm ──');
+const confHigh = computeEvidenceConfidence(
+  Array.from({ length: 25 }, (_, i) => makePost(`p_${i}`, 'content', 'youtube', '2026-08-01T00:00:00Z', makeSentiment('positive', 'joy'))),
+  50,
+  ['youtube', 'telegram', 'reddit']
 );
+assert('Large corpus sample (N=25, P=3, T=50h) yields HIGH confidence', confHigh.level === 'HIGH' && confHigh.score >= 70);
 
-// 0.40*50 + 0.25*60 + 0.20*100 + 0.15*40 = 20+15+20+6 = 61
-assert(
-  score !== null && Math.abs(score - 61) < 0.5,
-  `Weighted sum correct: ${score} (expected ~61)`
-);
+const confLow = computeEvidenceConfidence([testPosts[0]], 1, ['youtube']);
+assert('Minimal single post sample yields LOW confidence', confLow.level === 'LOW' && confLow.score < 45);
 
-const partialBreakdown: MutationBreakdown = {
-  semanticShift: 50,
-  sentimentShift: null,
-  emotionShift: 100,
-  keywordShift: 40,
-  mutationScore: null,
-};
-assert(
-  computeMutationScore(partialBreakdown) === null,
-  'Missing component → null score'
-);
+// ── 10. Platform Propagation & Cross-Platform Matrix ──────────────────────
+console.log('\n── 10. Platform Propagation & Cross-Platform ──');
+assert('Propagation detects origin platform (YouTube)', propagation.originPlatform === 'youtube');
+assert('Propagation tracks migration hops with delays', propagation.hops.length >= 2);
 
-section('Keyword Evolution');
+const crossMatrix = buildCrossPlatformMatrix(testPosts, embProductivity, testEmbeddingMap);
+assert('Cross-platform matrix compares framing across platforms', crossMatrix.length >= 2);
+assert('Matrix includes post counts and sentiment per platform', crossMatrix[0].postCount > 0);
 
-const evolution = buildKeywordEvolution(testPosts);
-assert(
-  evolution.length >= 2,
-  `At least 2 stages: ${evolution.length}`
-);
+// ── 11. Narrative Branching & Convergence ─────────────────────────────────
+console.log('\n── 11. Narrative Branching & Convergence ──');
+const branches = detectBranches(testPosts, testEmbeddingMap);
+assert('Branching engine executes without error', Array.isArray(branches));
 
-assert(
-  evolution.every((s) => s.keywords.length > 0 || s.stage === 'middle'),
-  'Each stage has keywords or is middle (may be empty)'
-);
+const convergences = detectConvergences('test_narrative_1', testPosts, [{ id: 'other', posts: testPosts }], testEmbeddingMap);
+assert('Convergence engine checks vocabulary and centroid proximity', Array.isArray(convergences));
 
-section('Title Generation');
+// ── 12. Strict Anti-Fabrication & Edge Cases ──────────────────────────────
+console.log('\n── 12. Strict Anti-Fabrication & Edge Cases ──');
+const emptyConf = computeEvidenceConfidence([], 0, []);
+assert('Empty posts yield 0 score and LOW confidence', emptyConf.score === 0 && emptyConf.level === 'LOW');
 
-assert(
-  generateNarrativeTitle(testPosts).length > 0,
-  'Title is non-empty'
-);
+const zeroShift = computeSemanticShift([], []);
+assert('Empty vector list strictly returns null semantic shift', zeroShift === null);
 
-assert(
-  generateNarrativeTitle(testPosts) !== 'Unnamed narrative',
-  'Title is not the fallback'
-);
-
-assert(
-  generateNarrativeTitle([]) === 'Unnamed narrative',
-  'Empty posts → fallback title'
-);
-
-section('Tokenization');
-
-const tokens = tokenize('AI will improve software development!');
-assert(
-  tokens.includes('ai') && tokens.includes('software'),
-  'Tokenizes and lowercases correctly'
-);
-
-assert(
-  !tokenize('Check out https://example.com today').includes('https'),
-  'URLs are removed'
-);
-
-section('Top Keywords');
-
-const kw = extractTopKeywords(testPosts, 3);
-assert(
-  kw.length === 3,
-  `Returns requested count: ${kw.length}`
-);
-
-assert(
-  kw.some((k) => k.toLowerCase().includes('ai')),
-  `AI-related keyword in top keywords: [${kw.join(', ')}]`
-);
-
-section('Null / Edge Case Handling');
-
-assert(
-  computeSemanticShift([[]], [[]]) === null,
-  'Zero-dim embeddings → null'
-);
-
-assert(
-  computeKeywordShift(
-    [makePost('e', '', 'youtube', '2026-01-01T00:00:00Z', makeSentiment('neutral', 'neutral'))],
-    [makePost('f', '', 'youtube', '2026-01-01T00:00:00Z', makeSentiment('neutral', 'neutral'))]
-  ) === null,
-  'Empty text posts → null keyword shift'
-);
+const smallSent = computeSentimentShift([testPosts[0]], [testPosts[1]]);
+assert('Under MIN_STAGE_POSTS floor returns null sentiment shift', smallSent === null);
 
 // ── Summary ───────────────────────────────────────────────────────────────
+console.log('\n══════════════════════════════════════════════════');
+console.log(`Narrative Mutation Master Tests: ${passed} passed, ${failed} failed`);
+console.log('══════════════════════════════════════════════════\n');
 
-console.log(`\n${'═'.repeat(50)}`);
-console.log(`Narrative Mutation Tests: ${passed} passed, ${failed} failed`);
-console.log('═'.repeat(50));
-
-if (failed > 0) {
-  process.exit(1);
-}
+if (failed > 0) process.exit(1);

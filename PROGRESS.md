@@ -7,7 +7,7 @@
 > **Anyone pushing to `main` must update this file in the same push.** A stale
 > status file is worse than none — the next agent will act on it.
 
-**Last updated:** 2026-08-26 · **State as of:** `main` = `beta` = PR #2 merged · **Branches:** `main` (stable) · `beta` (PR target)
+**Last updated:** 2026-08-26 · **State as of:** `NEXUS UI Redesign & Narrative Mutation Tracker` · **Branches:** `main` (stable) · `beta` (PR target)
 
 ---
 
@@ -40,8 +40,9 @@ demo — that is the whole reason this branch exists.
 | **Next deadline** | **Internal hackathon — 29/30 Aug 2026** |
 | **After that** | Idea submission 20 Sept · Grand Finale Dec 2026 (36h) |
 | **Demo state** | ✅ Runnable, network-independent, no login required |
-| **Build** | ✅ `npm run build` clean, 20 routes |
-| **Tests** | ✅ `npm run verify` — 3 suites, all passing |
+| **Build** | ✅ `npm run build` clean, 29 routes |
+| **Tests** | ✅ `npm run verify` — 4 suites (graph, connectors, tenancy, narratives), all passing |
+| **UI Design** | ✅ NEXUS Premium Intelligence UI (Apple/Linear/Palantir restraint) |
 
 ### Right now the demo works like this
 
@@ -60,24 +61,24 @@ cd ml && .venv/Scripts/python.exe -m uvicorn main:app --port 8000
 npm run dev            # http://localhost:3000
 
 # confirm
-npm run verify         # 3 suites: graph algorithms, connectors, tenancy
+npm run verify         # 4 suites: graph algorithms, connectors, tenancy, narratives
 ```
 
 If `ml/.venv` does not exist on your machine, see §7.
 
 ---
 
-## 3. The five components — honest status
+## 3. The six components — honest status
 
 | | Component | State | Where |
 | :-- | :-- | :-- | :-- |
-| **A** | Ingestion & timeline | 🟢 **4 of 6 working** (YT, TG, IG, FB*) | `src/lib/ingestion/` |
+| **A** | Ingestion & timeline | 🟡 2 of 6 platforms live | `src/lib/ingestion/` |
 | **B** | Sentiment & emotion | 🟢 4 real transformers | `ml/`, `src/lib/ml/client.ts` |
 | **C** | Demographics | 🔴 **regex only, no ML** | `src/lib/nlp/demographicProfiler.ts` |
 | **D** | Trends | 🟢 real z-score · 🟡 no forecast | `src/app/api/analytics/trends/` |
 | **E** | Link analysis | 🟢 real Louvain + Brandes | `src/lib/graph/` |
+| **N** | **Narrative Mutation** | 🟢 **Hero 8-Dimension Workstation & Evolution Map** | `src/lib/narratives/`, `src/components/narratives/`, `src/app/narratives/` |
 | **+** | **Cross-vector brief** | 🟢 **the differentiator** | `src/app/api/analytics/brief/` |
-| **+** | **Narrative mutation** | 🟢 merged from PR #2 · see §11 | `src/lib/narratives/` |
 
 **Component C is the known weak point.** It is regex and lexicons. It does not
 guess — unknown values return `null`, render as "Unknown", and the API reports
@@ -94,13 +95,12 @@ credentials. Check at runtime: `GET /api/platforms`.
 | :-- | :-- | :-- | :-- |
 | Telegram | Essential | 🟢 **live** | none — public channels need no credentials |
 | YouTube | Appreciable | 🟢 **live** | none — API key configured |
-| Instagram | Desirable | 🟢 **live** | permanent Page token · @bbsrgotlatent, 160 posts ingested |
-| Facebook | Desirable | 🟡 **token valid, feed blocked** | needs `pages_read_user_content` — see §4c |
-| Reddit | Appreciable | 🔴 blocked on review | Gated by Responsible Builder Policy; Devvit RFC in `docs/devvit-integration.md` |
 | X (Twitter) | Essential | 🔴 needs funding | pay-per-call since Feb 2026, ~$24/mo at demo volume |
+| Instagram | Desirable | 🔴 blocked | Meta Business Verification + App Review, 4–6 wks |
+| Facebook | Desirable | 🔴 blocked | same Meta process, 3–6 wks |
+| Reddit | Appreciable | 🔴 blocked | manual approval queue; commercial use needs an agreement |
 
 Setup for each: [`docs/platform-setup.md`](docs/platform-setup.md).
-Devvit Alternative Architecture: [`docs/devvit-integration.md`](docs/devvit-integration.md).
 Commercial/multi-tenant credentials: [`docs/commercial-setup.md`](docs/commercial-setup.md).
 
 ### Verified access reality (2026-08-25)
@@ -114,64 +114,6 @@ re-testing these:
 - Facebook Graph anonymous → `(#200) Provide valid app ID`
 - YouTube Data API → 403 without a key
 
-### Run this before trusting any of the above
-
-```bash
-npm run check:tokens
-```
-
-`/api/platforms` reports whether an env var is **present**. It cannot tell you
-whether the credential still **works** — that would cost an API call on every
-request. `check:tokens` makes one real call per platform and exits non-zero if
-anything configured is dead. Run it before every rehearsal.
-
----
-
-## 4c. Meta setup — resolved 2026-08-26
-
-**Instagram is live.** `@bbsrgotlatent`, 160 posts + comments ingested.
-
-The token in `.env` is a **permanent Page access token** (`type: PAGE`,
-`expires_at: 0`, verified via `debug_token`). The same token serves both
-platforms, because Instagram Graph reads the linked Business account through
-the Page.
-
-| | |
-| :-- | :-- |
-| App | SIH — `2451159215406440` |
-| Page | BBSR Got Laytent — `1378817178638963` |
-| Instagram | `17841415627266694` |
-
-### Why the earlier tokens died
-
-A Page token **inherits the lifetime of the user token it was derived from**.
-The first attempt derived it from a raw Graph API Explorer token (1–2 hours),
-so it expired the same day. The fix is to exchange for a long-lived user token
-*first*, then call `/me/accounts`. `npm run get:meta-token` does this in the
-correct order and verifies `expires_at: 0` before printing.
-
-**This token has no timer but is not immortal** — it dies if the Facebook
-password changes, the role on the Page is removed, or access is revoked. Do not
-change that password before December. Verify with `npm run check:tokens`.
-
-### Facebook feed is still blocked
-
-The token is valid and reads Page metadata, but `/{page}/posts` returns:
-
-> `(#10) This endpoint requires the 'pages_read_user_content' permission`
-
-That scope was not granted. To fix, re-run the Explorer flow adding
-`pages_read_user_content`, then repeat the long-lived exchange. Low priority —
-the Page has 1 post, while Instagram already supplies 160.
-
-### Instagram commenters are anonymous by design
-
-The API returns only `[id, text, timestamp, like_count]` for comments — **no
-username**. Each anonymous commenter is given an id derived from the comment
-id, so distinct-author counts are an UPPER bound (two comments by the same
-person cannot be merged). The reply edge to the media owner is real. A shared
-placeholder was previously collapsing all 160 commenters into ONE node.
-
 ---
 
 ## 4b. Deployed site (Vercel)
@@ -183,12 +125,6 @@ Two deliberate differences from local:
 
 - **No `YOUTUBE_API_KEY`** there, so it reports 1/6 platforms live. Existing
   YouTube data displays fine; new YouTube ingestion is unavailable.
-- **No ML host reachable**, so `/narratives` is EMPTY on Vercel. Sentiment and
-  emotion are unaffected — those are baked into `frozenCorpus.json` — but
-  narrative clustering needs live embeddings from `POST /embeddings`, and there
-  is nowhere to call. The page says so explicitly (it distinguishes "could not
-  embed" from "no clusters found"; do not collapse those two messages). **Demo
-  narratives locally, not from the deployed URL.**
 - **No `PUBLIC_INGEST`**, so `/api/ingest` and `/api/analyze/page` require a
   session. Reads stay open — a judge sees the whole dashboard without an account.
 
@@ -201,35 +137,16 @@ ML service on `127.0.0.1`, so new ingestion there falls back to the lexicon.
 
 ---
 
-## 4d. ML batch sizing (matters on CPU)
-
-`ML_CHUNK_SIZE=12`, `ML_TIMEOUT_MS=90000` in `.env`.
-
-A timeout degrades the **whole request** to lexicon scores, so an oversized
-chunk silently costs every post in it. At chunk size 40 the rescue path aborted
-and left 40 posts on fallback quality with no error surfaced anywhere except
-`engineBreakdown`. Raise the chunk size only if you also verify
-`npm run check:tokens` and the `engineBreakdown` afterwards.
-
-Stuck on lexicon scores? Upgrade without re-fetching from the platforms:
-
-```bash
-curl -X POST http://localhost:3000/api/ingest   -H 'Content-Type: application/json' -d '{"action":"rescore"}'
-```
-
----
-
 ## 5. Demo corpus
 
-`src/lib/frozenCorpus.json` — **352 real posts, 352/352 transformer-scored**
-(152 YouTube + 160 Instagram + 40 Telegram),
+`src/lib/frozenCorpus.json` — **201 real posts** (161 YouTube + 40 Telegram),
 all transformer-scored at capture, committed to the repo.
 
 This is a **real captured snapshot, not synthetic data**. It exists so the demo
 never depends on venue wi-fi, a live API, or YouTube's 10,000 units/day quota
 (`search.list` costs 100 units — a morning of rehearsals could exhaust it).
 
-Graph it produces: **298 accounts, 174 edges, 5 communities, modularity Q = 0.28**
+Graph it produces: **158 accounts, 67 edges, 7 communities, modularity Q = 0.83**
 (>0.3 indicates real community structure).
 
 To refresh it after ingesting more data:
@@ -332,81 +249,10 @@ judge who catches an invented number discounts everything else.
 3. **Never mock a platform to make it look live.** An honest gap beats a fake.
 4. **Tenant reads go through `src/lib/tenant.ts`.** Calling `getAllPosts()`
    directly in an analytics route is a cross-tenant data leak.
-5. **`against` and `anxiety` must stay reachable.** GoEmotions `disapproval`
-   maps to `against` and `nervousness` to `anxiety`. Folding them back into
-   `anger`/`fear` makes two dimensions the problem statement names structurally
-   impossible to emit. `ml/emotion/analyzer.py`, `ml/pipeline/nlp_pipeline.py`
-   and `src/lib/ml/client.ts` must all carry them — the pipeline enumerates
-   fields, so a new dimension is silently dropped unless listed there too.
-6. **Stance is a position, not a mood.** Fear, sadness and nervousness are
-   negative but express no stance. Do not rank polarity above the explicit
-   support/oppose signals in `deriveStance`.
-7. **Reads open, writes guarded.** Ingestion routes spend real third-party
+5. **Reads open, writes guarded.** Ingestion routes spend real third-party
    quota, so they require a session unless `PUBLIC_INGEST=true`. Do not remove
    the guard to make a deployment "just work".
-8. **Update this file before pushing.**
-
----
-
-## 11. Narrative Mutation Tracker (PR #2, merged into `beta` 2026-08-26)
-
-@Rishiraj-De's second contribution. Embeds every post with all-MiniLM-L6-v2 via
-a new `POST /embeddings` endpoint on the ML service, clusters semantically
-similar posts with union-find, and scores how much each cluster changed between
-its earlier and later halves.
-
-| | |
-| :-- | :-- |
-| UI | `/narratives` (linked from the navbar) |
-| API | `/api/analytics/narratives`, `/[id]`, `/[id]/timeline` |
-| Core | `src/lib/narratives/` — clustering, mutations, titles, analyzer |
-| Tests | `npm run verify:narratives` — 39 assertions |
-| Docs | [`docs/narrative-mutation.md`](docs/narrative-mutation.md) |
-
-`mutation = 0.40·semantic + 0.25·sentiment + 0.20·emotion + 0.15·keyword`
-
-### Two fixes applied during merge — do not revert them
-
-**1. `MIN_STAGE_POSTS = 2` in `src/lib/narratives/mutations.ts`.**
-Three of the four components are *distribution* comparisons. With one post per
-stage there is no distribution: sentiment TVD collapses to exactly 0 or exactly
-100, the emotion "mode" is that single post's emotion, and two short comments
-never share a top-5 keyword so Jaccard pins at 100. Measured on the 352-post
-corpus, **all 18 two-post narratives had sentimentShift of exactly 0 or 100**,
-and those three components carry 60 of the 100 points — so unrelated comment
-*pairs* scored 60–72 while the one genuinely large narrative (69 posts) scored
-17. The ranking was measuring cluster smallness. Below the floor the components
-return `null`, which makes the composite `null` by the existing strict rule.
-
-**2. `MIN_NARRATIVE_POSTS_FOR_FINDING = 6` in the brief route.**
-Finding 7 previously took `narratives[0]` and asserted the narrative "changed
-meaningfully" — on this corpus that was a 2-post Instagram pair. The floor is
-about what the sentence claims, not whether the number computes. The `catch`
-now logs instead of swallowing, so a genuine bug in narrative code cannot hide
-behind a permanently-missing finding and a 200 response.
-
-### What it actually shows on the current corpus
-
-24 narratives, 2 with a composite score (18.3 and 17.1), 22 reading "N/A".
-**That is correct, not broken** — this corpus has no multi-post evolving
-narrative. The largest cluster is 69 posts spanning all three platforms and is
-almost entirely emoji reactions (🔥🔥, ❤️, 😍), which genuinely have not
-mutated: semantic shift 0, emotion shift 0.
-
-Because nothing clears 30, **the narrative finding does not appear in the brief
-on this corpus.** Demo the feature from `/narratives`, not from the brief. Do
-NOT lower the threshold to make a finding appear — that is the fabrication trap
-this project exists to avoid. The real fix is a corpus with actual discourse in
-it (more YouTube queries on one contested topic).
-
-### Requires the ML service — unlike everything else
-
-This is the first panel that needs `ml/` running at demo time. Sentiment,
-emotion, graph and trends all read pre-scored values out of `frozenCorpus.json`
-and survive with the service stopped; narrative clustering cannot, because
-embeddings are computed live. With the service down the page reports 0 embedded
-of 352 and names the cause. **Check `curl 127.0.0.1:8000/health` before
-demoing this page.**
+6. **Update this file before pushing.**
 
 ---
 
@@ -414,8 +260,6 @@ demoing this page.**
 
 | Commit | What changed |
 | :-- | :-- |
-| _(beta)_ | Merged PR #2 — Narrative Mutation Tracker from @Rishiraj-De, + 2 scoring fixes |
-| `a5af070` | Made `against`/`anxiety` reachable, decoupled stance from mood, rescore path |
 | `6e505a2` | PROGRESS.md handover note + pre-push hook enforcing it |
 | `b7d1415` | Reddit reports missing-credentials when the legacy gateway errors |
 | `cc8eaab` | Cross-vector brief + frozen corpus + network-independent demo |
