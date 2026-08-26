@@ -132,7 +132,7 @@ anything configured is dead. Run it before every rehearsal.
 
 ---
 
-## 4c. Meta tokens — REVOKED 2026-08-27
+## 4c. Meta tokens — developer account block CLEARED 2026-08-27, re-mint pending
 
 `npm run check:tokens` now reports Instagram and Facebook as dead. The failing
 call returns:
@@ -145,7 +145,13 @@ call returns:
 This is **not** an expiry, and not a scope problem either. The root cause is one
 level up:
 
-> **The Meta developer account itself is blocked.**
+> **UPDATE 2026-08-27:** the block has since been lifted — `developers.facebook.com`
+> loads normally again and both apps (SIH `2451159215406440`, BBSR Got Laytent
+> `1087771250347545`) are listed and In development. The tokens in `.env` are
+> still dead; they need re-minting. What follows is the diagnosis of the outage,
+> kept because the cause matters.
+>
+> **The Meta developer account was blocked.**
 > `developers.facebook.com` redirects to a "Developer Platform Blocked User
 > Error" page reading: *"Account confirmation needed — We've noticed unusual
 > activity on this developer account. Please complete the confirmation steps to

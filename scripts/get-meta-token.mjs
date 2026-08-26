@@ -37,6 +37,11 @@ const GRAPH = 'https://graph.facebook.com/v21.0';
 const SCOPES = [
   'pages_show_list',
   'pages_read_engagement',
+  // Without this the Page token reads metadata but /{page}/posts returns
+  // "(#10) requires the 'pages_read_user_content' permission" -- which is the
+  // state the previous token was left in. Granting it here means one mint
+  // fixes both platforms instead of needing a second pass for Facebook.
+  'pages_read_user_content',
   'instagram_basic',
   'instagram_manage_insights',
 ].join(',');
