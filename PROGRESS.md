@@ -139,7 +139,18 @@ never run, so they died within hours of being pasted in.
 **No secret was leaked.** `.env` stayed gitignored and a full history scan found
 zero token strings in any commit.
 
-**To fix**, generate a fresh Explorer token, then exchange it *before* using it:
+**To fix — the automated way (preferred):**
+
+```bash
+npm run get:meta-token
+```
+
+Add `FACEBOOK_APP_ID` and `FACEBOOK_APP_SECRET` to `.env` first, register the
+redirect URI it prints, then click Approve once. It performs the exchange in
+the correct order, verifies `expires_at: 0` before printing, and resolves the
+Instagram Business ID. The manual route below is only for reference.
+
+**Manually:** generate a fresh Explorer token, then exchange it *before* using it:
 
 ```bash
 curl "https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=APP_ID&client_secret=APP_SECRET&fb_exchange_token=SHORT_LIVED_TOKEN"

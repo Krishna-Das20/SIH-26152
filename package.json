@@ -11,7 +11,8 @@
     "verify:connectors": "tsx src/lib/ingestion/__tests__/verify-connectors.ts",
     "verify": "npm run verify:graph && npm run verify:connectors && npm run verify:tenancy",
     "verify:tenancy": "tsx src/lib/__tests__/verify-tenancy.ts",
-    "check:tokens": "node scripts/check-tokens.mjs"
+    "check:tokens": "node scripts/check-tokens.mjs",
+    "get:meta-token": "node scripts/get-meta-token.mjs"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.11.3",
