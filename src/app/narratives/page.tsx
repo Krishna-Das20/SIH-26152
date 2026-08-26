@@ -1,362 +1,427 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { NexusLayout, TopBar, MetricCard, SectionHeader } from '@/components/nexus';
-import { TrendingUp, Activity, ArrowDown, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
-
-// ── Types ─────────────────────────────────────────────────────────────────
-
-interface TimelineEntry {
-  timestamp: string; platform: string; postId: string;
-  sentiment: string; emotion: string; contentSnippet: string;
-}
-interface PlatformFlowEntry { platform: string; firstSeen: string; postCount: number; }
-interface KeywordStage { stage: string; keywords: string[]; periodStart: string; periodEnd: string; }
-interface Narrative {
-  id: string; title: string; postIds: string[]; platforms: string[];
-  firstSeen: string; lastSeen: string; postCount: number; engagement: number;
-  mutationScore: number | null; semanticShift: number | null;
-  sentimentShift: number | null; emotionShift: number | null; keywordShift: number | null;
-  dominantSentiment: string | null; dominantEmotion: string | null;
-  timeline: TimelineEntry[]; platformFlow: PlatformFlowEntry[];
-  keywordEvolution: KeywordStage[];
-}
-interface NarrativeResponse {
-  narratives: Narrative[]; totalPostsAnalyzed: number;
-  availablePlatforms: string[];
-  coverage: { sentiment: number; emotion: number; embeddings: number };
-  method: { clustering: string; similarityThreshold: number; embeddingModel: string; mutationFormula: string };
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-const PLATFORM_LABELS: Record<string, string> = {
-  youtube: 'YouTube', telegram: 'Telegram', x: 'X', reddit: 'Reddit',
-  instagram: 'Instagram', facebook: 'Facebook',
-};
-
-function fmtDate(iso: string) {
-  try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
-  catch { return '—'; }
-}
-function fmtDateShort(iso: string) {
-  try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
-  catch { return '—'; }
-}
-function metricDisplay(v: number | null, suffix = '%'): string {
-  if (v === null) return 'Unknown';
-  return `${v.toFixed(1)}${suffix}`;
-}
-function mutationSeverity(score: number | null): { color: string; label: string } {
-  if (score === null) return { color: 'text-nexus-muted', label: 'Unknown' };
-  if (score >= 60) return { color: 'text-nexus-negative', label: 'High' };
-  if (score >= 30) return { color: 'text-nexus-warning', label: 'Notable' };
-  return { color: 'text-nexus-positive', label: 'Low' };
-}
-
-// ── Page ──────────────────────────────────────────────────────────────────
+import {
+  NarrativeEvolutionMap,
+  MutationBreakpointDrawer,
+  EvidenceChainViewer,
+  CrossPlatformMatrix,
+  NarrativeCompareModal,
+} from '@/components/narratives';
+import {
+  TrendingUp,
+  Activity,
+  Zap,
+  GitCompare,
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  ShieldCheck,
+  Filter,
+  Layers,
+} from 'lucide-react';
+import type {
+  Narrative,
+  NarrativeBreakpoint,
+  TimeWindowFilter,
+  NarrativeAnalysisResponse,
+} from '@/lib/narratives/types';
 
 export default function NarrativesPage() {
-  const [data, setData] = useState<NarrativeResponse | null>(null);
+  const [data, setData] = useState<NarrativeAnalysisResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchNarratives = async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true); else setLoading(true);
-    try {
-      const url = '/api/analytics/narratives';
-      const res = await fetch(isRefresh ? url : url, { method: isRefresh ? 'POST' : 'GET' });
-      const json = await res.json();
-      if (json.error) { setError(json.note || json.error); }
-      else { setData(json); setError(null); }
-    } catch { setError('Narrative analysis requires the ML service.'); }
-    finally { setLoading(false); setRefreshing(false); }
-  };
+  // Filters
+  const [timeWindow, setTimeWindow] = useState<TimeWindowFilter>('all');
+  const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
 
-  useEffect(() => { fetchNarratives(); }, []);
+  // Interactive Selection
+  const [heroNarrativeId, setHeroNarrativeId] = useState<string | null>(null);
+  const [selectedBreakpoint, setSelectedBreakpoint] = useState<NarrativeBreakpoint | null>(null);
+  const [isCompareOpen, setIsCompareOpen] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const highMutation = data ? data.narratives.filter(n => n.mutationScore !== null && n.mutationScore >= 30).length : 0;
+  const fetchNarratives = useCallback(
+    async (isRefresh = false) => {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+
+      try {
+        const query = new URLSearchParams({
+          window: timeWindow,
+          platform: selectedPlatform,
+        });
+        const url = `/api/analytics/narratives?${query.toString()}`;
+        const res = await fetch(url, { method: isRefresh ? 'POST' : 'GET' });
+        const json = await res.json();
+
+        if (json.error) {
+          setError(json.note || json.error);
+        } else {
+          setData(json);
+          setError(null);
+          if (json.narratives?.length > 0 && !heroNarrativeId) {
+            setHeroNarrativeId(json.narratives[0].id);
+          }
+        }
+      } catch {
+        setError('Narrative intelligence analysis requires the Python ML service on port 8000.');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [timeWindow, selectedPlatform, heroNarrativeId]
+  );
+
+  useEffect(() => {
+    fetchNarratives();
+  }, [fetchNarratives]);
+
+  const narratives = data?.narratives || [];
+  const heroNarrative = narratives.find((n) => n.id === heroNarrativeId) || narratives[0];
+
+  const totalBreakpoints = narratives.reduce((s, n) => s + (n.breakpoints?.length || 0), 0);
+  const highConfidenceCount = narratives.filter((n) => n.confidence?.level === 'HIGH').length;
 
   return (
     <NexusLayout>
       <TopBar
-        title="Narrative Intelligence"
-        subtitle="Understand how conversations change over time."
+        title="Narrative Intelligence Workstation"
+        subtitle="Detect semantic transformations, breakpoint inflections, and cross-platform propagation."
         onRefresh={() => fetchNarratives(true)}
         refreshing={refreshing}
       />
 
-      <main className="px-8 py-6">
+      <main className="px-8 py-6 max-w-7xl">
+        {/* Filters & Actions Bar */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-nexus-border">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono uppercase text-nexus-muted flex items-center gap-1.5 mr-2">
+              <Filter className="w-3.5 h-3.5" /> Time Window:
+            </span>
+            {(['all', '24h', '7d', '30d'] as TimeWindowFilter[]).map((w) => (
+              <button
+                key={w}
+                onClick={() => setTimeWindow(w)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-mono uppercase transition-all ${
+                  timeWindow === w
+                    ? 'bg-nexus-surface-secondary text-nexus-text-primary border border-nexus-accent shadow-sm'
+                    : 'bg-nexus-surface text-nexus-muted border border-nexus-border hover:text-nexus-text-primary'
+                }`}
+              >
+                {w}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsCompareOpen(true)}
+              disabled={narratives.length < 2}
+              className="px-3 py-1.5 rounded-lg bg-nexus-surface-secondary text-nexus-text-primary border border-nexus-border hover:border-nexus-accent text-xs font-medium flex items-center gap-2 transition-all disabled:opacity-40"
+            >
+              <GitCompare className="w-3.5 h-3.5 text-nexus-accent" />
+              <span>Compare Narratives</span>
+            </button>
+          </div>
+        </div>
+
         {/* Loading */}
         {loading && (
-          <div className="flex items-center justify-center py-20">
+          <div className="flex items-center justify-center py-24">
             <div className="text-center">
-              <Activity className="w-6 h-6 text-nexus-muted animate-pulse mx-auto mb-3" />
-              <p className="text-nexus-text-secondary text-sm">Generating embeddings and clustering narratives…</p>
-              <p className="text-nexus-muted text-xs mt-1">Requires ML service at port 8000</p>
+              <Activity className="w-8 h-8 text-nexus-accent animate-pulse mx-auto mb-3" />
+              <p className="text-nexus-text-primary text-sm font-medium">
+                Executing Narrative Intelligence Pipeline…
+              </p>
+              <p className="text-nexus-muted text-xs mt-1">
+                Encoding semantic vectors and calculating 8-dimension mutation metrics.
+              </p>
             </div>
           </div>
         )}
 
         {/* Error */}
         {error && !loading && (
-          <div className="nexus-surface rounded-xl p-6 border-nexus-warning/30 mb-6">
-            <p className="text-nexus-warning text-sm font-medium">Analysis Unavailable</p>
-            <p className="text-nexus-text-secondary text-xs mt-1">{error}</p>
+          <div className="nexus-surface rounded-xl p-6 border-nexus-warning/40 mb-8">
+            <p className="text-nexus-warning text-sm font-semibold">Narrative Analysis Unavailable</p>
+            <p className="text-nexus-text-secondary text-xs mt-1 leading-relaxed">{error}</p>
           </div>
         )}
 
         {data && !loading && (
           <>
-            {/* KPIs */}
+            {/* KPI Ribbon */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              <MetricCard label="Narratives Detected" value={data.narratives.length} />
-              <MetricCard label="High Mutation" value={highMutation} subtitle={highMutation > 0 ? 'mutation > 30%' : 'None above threshold'} />
-              <MetricCard label="Posts Analyzed" value={data.totalPostsAnalyzed} />
+              <MetricCard label="Narratives Identified" value={narratives.length} />
+              <MetricCard
+                label="Detected Breakpoints"
+                value={totalBreakpoints}
+                subtitle="Sharp inflection moments"
+              />
+              <MetricCard
+                label="High Confidence"
+                value={`${highConfidenceCount} / ${narratives.length}`}
+                subtitle="Corpus sample >= 8 posts"
+              />
               <MetricCard
                 label="Embedding Coverage"
-                value={`${(data.coverage.embeddings * 100).toFixed(0)}%`}
-                subtitle={`${data.method.embeddingModel}`}
+                value={`${Math.round(data.coverage.embeddings * 100)}%`}
+                subtitle="all-MiniLM-L6-v2 vectors"
               />
             </div>
 
-            {/* Method transparency */}
-            <div className="flex flex-wrap gap-4 text-[11px] text-nexus-muted mb-8 px-1">
-              <span>Clustering: <span className="text-nexus-text-secondary">{data.method.clustering}</span></span>
-              <span>Threshold: <span className="text-nexus-text-secondary">{data.method.similarityThreshold}</span></span>
-              <span>Formula: <span className="text-nexus-text-secondary">{data.method.mutationFormula}</span></span>
-            </div>
-
-            {/* Empty state */}
-            {data.narratives.length === 0 && (
-              <div className="nexus-surface rounded-xl p-10 text-center">
+            {/* Empty State */}
+            {narratives.length === 0 && (
+              <div className="nexus-surface rounded-xl p-12 text-center border border-nexus-border">
                 <TrendingUp className="w-8 h-8 text-nexus-muted mx-auto mb-3" strokeWidth={1} />
                 {data.coverage.embeddings === 0 ? (
                   <>
                     <p className="text-nexus-text-primary text-sm font-medium mb-1">
-                      Narrative detection unavailable
+                      Narrative Detection Offline
                     </p>
                     <p className="text-nexus-muted text-xs max-w-md mx-auto">
-                      Clustering needs sentence embeddings, and the ML service was unreachable, so 0 of {data.totalPostsAnalyzed} posts were embedded.
-                      Start the ML service (<code className="text-nexus-accent">uvicorn main:app --port 8000</code> in <code className="text-nexus-accent">ml/</code>) and reload.
+                      Clustering requires dense sentence embeddings from the Python ML service.
+                      Start the service on port 8000 (<code>uvicorn main:app --port 8000</code> in{' '}
+                      <code>ml/</code>) and refresh.
                     </p>
                   </>
                 ) : (
                   <>
-                    <p className="text-nexus-text-secondary text-sm mb-1">No narratives detected</p>
+                    <p className="text-nexus-text-secondary text-sm mb-1">No Narratives Formed</p>
                     <p className="text-nexus-muted text-xs">
-                      All {data.totalPostsAnalyzed} posts were embedded, but none were similar enough to group above the similarity threshold ({data.method.similarityThreshold}). This is a real result.
+                      All posts were encoded, but none exhibited semantic similarity above the{' '}
+                      {data.method.similarityThreshold} threshold.
                     </p>
                   </>
                 )}
               </div>
             )}
 
-            {/* Narrative cards */}
-            <div className="space-y-3">
-              {data.narratives.map((n) => (
-                <NarrativeCard
-                  key={n.id}
-                  narrative={n}
-                  expanded={expandedId === n.id}
-                  onToggle={() => setExpandedId(expandedId === n.id ? null : n.id)}
+            {/* Hero Evolution Map */}
+            {heroNarrative && (
+              <div className="mb-10">
+                <NarrativeEvolutionMap
+                  narrative={heroNarrative}
+                  onSelectBreakpoint={(bp) => setSelectedBreakpoint(bp)}
                 />
-              ))}
+              </div>
+            )}
+
+            {/* Narrative Intelligence Dossiers Header */}
+            {narratives.length > 0 && (
+              <div className="mb-6">
+                <SectionHeader
+                  title="Narrative Intelligence Dossiers"
+                  subtitle="Detailed 8-dimension mutation breakdown, factual evidence, and multi-platform trajectories."
+                />
+              </div>
+            )}
+
+            {/* Dossier Cards List */}
+            <div className="space-y-4 mb-10">
+              {narratives.map((n) => {
+                const isExpanded = expandedId === n.id;
+                const isSelectedHero = heroNarrativeId === n.id;
+
+                return (
+                  <div
+                    key={n.id}
+                    className={`nexus-surface rounded-2xl p-6 border transition-all ${
+                      isSelectedHero
+                        ? 'border-nexus-accent/60 bg-nexus-surface'
+                        : 'border-nexus-border hover:border-nexus-border/90'
+                    }`}
+                  >
+                    {/* Top row */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                          <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-nexus-surface-secondary text-nexus-accent border border-nexus-border">
+                            {n.id}
+                          </span>
+                          <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-nexus-surface-secondary text-nexus-text-secondary border border-nexus-border capitalize">
+                            State: {n.state}
+                          </span>
+                          {n.confidence && (
+                            <span
+                              className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
+                                n.confidence.level === 'HIGH'
+                                  ? 'bg-nexus-positive/10 text-nexus-positive'
+                                  : 'bg-nexus-warning/10 text-nexus-warning'
+                              }`}
+                            >
+                              {n.confidence.level} CONFIDENCE
+                            </span>
+                          )}
+                        </div>
+
+                        <h3 className="text-base font-bold text-nexus-text-primary">
+                          {n.title}
+                        </h3>
+
+                        <div className="flex flex-wrap items-center gap-3 text-[11px] text-nexus-muted mt-1.5">
+                          <span>{n.postCount} posts observed</span>
+                          <span>·</span>
+                          <span>Platforms: {n.platforms.join(', ')}</span>
+                          <span>·</span>
+                          <span>Span: {n.timeSpanHours}h</span>
+                        </div>
+                      </div>
+
+                      {/* Score badges & Controls */}
+                      <div className="flex items-center gap-4 flex-shrink-0">
+                        <div className="text-right">
+                          <p className="text-[10px] text-nexus-muted uppercase font-mono">
+                            Mutation Score
+                          </p>
+                          <p
+                            className={`text-xl font-bold nexus-metric ${
+                              (n.mutationScore ?? 0) >= 50
+                                ? 'text-nexus-negative'
+                                : (n.mutationScore ?? 0) >= 25
+                                ? 'text-nexus-warning'
+                                : 'text-nexus-positive'
+                            }`}
+                          >
+                            {n.mutationScore !== null ? `${n.mutationScore}%` : 'N/A'}
+                          </p>
+                        </div>
+
+                        <button
+                          onClick={() => setHeroNarrativeId(n.id)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                            isSelectedHero
+                              ? 'bg-nexus-accent/20 text-nexus-accent border-nexus-accent/50'
+                              : 'bg-nexus-surface-secondary text-nexus-text-secondary border-nexus-border hover:text-nexus-text-primary'
+                          }`}
+                        >
+                          {isSelectedHero ? 'Active Hero Map' : 'Set as Hero'}
+                        </button>
+
+                        <button
+                          onClick={() => setExpandedId(isExpanded ? null : n.id)}
+                          className="p-1.5 rounded-lg bg-nexus-surface-secondary text-nexus-muted hover:text-nexus-text-primary border border-nexus-border"
+                        >
+                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 8-Dimension Shift Gauges (Always Visible) */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2 pt-5 mt-5 border-t border-nexus-border">
+                      <div className="p-2.5 rounded-lg bg-nexus-surface-secondary/40 border border-nexus-border/60 text-center">
+                        <span className="text-[9px] font-mono uppercase text-nexus-muted block">Semantic</span>
+                        <span className="text-xs font-bold text-nexus-text-primary nexus-metric">
+                          {n.semanticShift !== null ? `${n.semanticShift}%` : '—'}
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-nexus-surface-secondary/40 border border-nexus-border/60 text-center">
+                        <span className="text-[9px] font-mono uppercase text-nexus-muted block">Sentiment</span>
+                        <span className="text-xs font-bold text-nexus-text-primary nexus-metric">
+                          {n.sentimentShift !== null ? `${n.sentimentShift}%` : '—'}
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-nexus-surface-secondary/40 border border-nexus-border/60 text-center">
+                        <span className="text-[9px] font-mono uppercase text-nexus-muted block">Emotion</span>
+                        <span className="text-xs font-bold text-nexus-text-primary nexus-metric">
+                          {n.emotionShift !== null ? `${n.emotionShift}%` : '—'}
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-nexus-surface-secondary/40 border border-nexus-border/60 text-center">
+                        <span className="text-[9px] font-mono uppercase text-nexus-muted block">Keyword</span>
+                        <span className="text-xs font-bold text-nexus-text-primary nexus-metric">
+                          {n.keywordShift !== null ? `${n.keywordShift}%` : '—'}
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-nexus-surface-secondary/40 border border-nexus-border/60 text-center">
+                        <span className="text-[9px] font-mono uppercase text-nexus-muted block">Entity</span>
+                        <span className="text-xs font-bold text-nexus-text-primary nexus-metric">
+                          {n.entityShift !== null ? `${n.entityShift}%` : '—'}
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-nexus-surface-secondary/40 border border-nexus-border/60 text-center">
+                        <span className="text-[9px] font-mono uppercase text-nexus-muted block">Platform</span>
+                        <span className="text-xs font-bold text-nexus-text-primary nexus-metric">
+                          {n.platformShift !== null ? `${n.platformShift}%` : '—'}
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-nexus-surface-secondary/40 border border-nexus-border/60 text-center">
+                        <span className="text-[9px] font-mono uppercase text-nexus-muted block">Community</span>
+                        <span className="text-xs font-bold text-nexus-text-primary nexus-metric">
+                          {n.communityShift !== null ? `${n.communityShift}%` : '—'}
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-nexus-surface-secondary/40 border border-nexus-border/60 text-center">
+                        <span className="text-[9px] font-mono uppercase text-nexus-muted block">Amplification</span>
+                        <span className="text-xs font-bold text-nexus-text-primary nexus-metric">
+                          {n.amplificationShift !== null ? `${n.amplificationShift}%` : '—'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Expanded Detail Workspace */}
+                    {isExpanded && (
+                      <div className="pt-6 mt-6 border-t border-nexus-border space-y-6 animate-in fade-in duration-200">
+                        {/* Evidence Chain & Why Mutated */}
+                        <EvidenceChainViewer
+                          evidenceChain={n.evidenceChain}
+                          whyMutated={n.whyMutated}
+                        />
+
+                        {/* Cross Platform Matrix */}
+                        {n.crossPlatformMatrix && n.crossPlatformMatrix.length > 1 && (
+                          <CrossPlatformMatrix matrix={n.crossPlatformMatrix} />
+                        )}
+
+                        {/* Link to Full Dossier */}
+                        <div className="pt-2 flex justify-end">
+                          <Link
+                            href={`/narratives/${n.id}`}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-nexus-accent text-nexus-bg text-xs font-semibold hover:bg-nexus-accent/90 transition-all shadow-md shadow-nexus-accent/10"
+                          >
+                            <span>Open Dedicated Dossier View</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </Link>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </>
         )}
       </main>
-    </NexusLayout>
-  );
-}
 
-// ── Narrative Card ────────────────────────────────────────────────────────
+      {/* Breakpoint Inspection Drawer */}
+      <MutationBreakpointDrawer
+        breakpoint={selectedBreakpoint}
+        timelinePosts={heroNarrative?.timeline || []}
+        onClose={() => setSelectedBreakpoint(null)}
+      />
 
-function NarrativeCard({ narrative: n, expanded, onToggle }: {
-  narrative: Narrative; expanded: boolean; onToggle: () => void;
-}) {
-  const severity = mutationSeverity(n.mutationScore);
-
-  return (
-    <div className="nexus-surface rounded-xl overflow-hidden nexus-card-hover">
-      {/* Header */}
-      <button onClick={onToggle} className="w-full text-left px-6 py-5 flex items-start justify-between gap-6">
-        <div className="flex-1 min-w-0">
-          {/* Title row */}
-          <div className="flex items-center gap-3 mb-2">
-            <span className={`text-lg font-semibold nexus-metric ${severity.color}`}>
-              {n.mutationScore !== null ? `${n.mutationScore.toFixed(1)}%` : '—'}
-            </span>
-            <span className="text-[10px] uppercase tracking-wider text-nexus-muted">mutation</span>
-            {n.platforms.map(p => (
-              <span key={p} className="text-[10px] px-2 py-0.5 rounded bg-nexus-surface-secondary text-nexus-text-secondary border border-nexus-border">
-                {PLATFORM_LABELS[p] || p}
-              </span>
-            ))}
-          </div>
-
-          <h3 className="text-[15px] font-medium text-nexus-text-primary truncate">{n.title}</h3>
-
-          <div className="flex items-center gap-3 mt-2 text-[11px] text-nexus-muted">
-            <span>{n.postCount} posts</span>
-            <span>·</span>
-            <span>{fmtDate(n.firstSeen)} → {fmtDate(n.lastSeen)}</span>
-            <span>·</span>
-            <span className={
-              n.dominantSentiment === 'positive' ? 'text-nexus-positive' :
-              n.dominantSentiment === 'negative' ? 'text-nexus-negative' :
-              'text-nexus-text-secondary'
-            }>{n.dominantSentiment || 'Unknown'}</span>
-            <span>·</span>
-            <span>{n.dominantEmotion || 'Unknown'}</span>
-          </div>
-        </div>
-        {expanded ? <ChevronUp className="w-4 h-4 text-nexus-muted mt-1" /> : <ChevronDown className="w-4 h-4 text-nexus-muted mt-1" />}
-      </button>
-
-      {/* Detail */}
-      {expanded && (
-        <div className="border-t border-nexus-border px-6 py-6 space-y-8">
-          {/* Mutation Breakdown */}
-          <div>
-            <span className="nexus-analytical">Mutation Breakdown</span>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-3">
-              <ShiftBar label="Semantic" value={n.semanticShift} weight="40%" />
-              <ShiftBar label="Sentiment" value={n.sentimentShift} weight="25%" />
-              <ShiftBar label="Emotion" value={n.emotionShift} weight="20%" />
-              <ShiftBar label="Keywords" value={n.keywordShift} weight="15%" />
-            </div>
-          </div>
-
-          {/* Platform Sequence */}
-          {n.platformFlow.length > 0 && (
-            <div>
-              <span className="nexus-analytical">Observed Platform Sequence</span>
-              <div className="flex items-center gap-3 mt-3 flex-wrap">
-                {n.platformFlow.map((pf, i) => (
-                  <React.Fragment key={pf.platform}>
-                    {i > 0 && <ArrowDown className="w-3 h-3 text-nexus-muted rotate-[-90deg]" />}
-                    <div className="px-4 py-2.5 rounded-lg bg-nexus-surface-secondary border border-nexus-border">
-                      <span className="text-[12px] font-medium text-nexus-text-primary">
-                        {PLATFORM_LABELS[pf.platform] || pf.platform}
-                      </span>
-                      <span className="text-[10px] text-nexus-muted ml-2">
-                        {pf.postCount} posts · {fmtDateShort(pf.firstSeen)}
-                      </span>
-                    </div>
-                  </React.Fragment>
-                ))}
-              </div>
-              <p className="text-[10px] text-nexus-muted mt-2 italic">Temporal association — does not imply propagation causality.</p>
-            </div>
-          )}
-
-          {/* Keyword Evolution */}
-          {n.keywordEvolution.length > 0 && (
-            <div>
-              <span className="nexus-analytical">Keyword Evolution</span>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-                {n.keywordEvolution.map(stage => (
-                  <div key={stage.stage} className="rounded-lg bg-nexus-surface-secondary/60 border border-nexus-border p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="nexus-label">{stage.stage}</span>
-                      <span className="text-[10px] text-nexus-muted">
-                        {fmtDateShort(stage.periodStart)} – {fmtDateShort(stage.periodEnd)}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {stage.keywords.map(kw => (
-                        <span key={kw} className="text-[11px] px-2 py-0.5 rounded-md bg-nexus-accent/5 text-nexus-accent border border-nexus-accent/10">
-                          {kw}
-                        </span>
-                      ))}
-                      {stage.keywords.length === 0 && (
-                        <span className="text-[10px] text-nexus-muted italic">No keywords</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Timeline */}
-          {n.timeline.length > 0 && (
-            <div>
-              <span className="nexus-analytical">Narrative Timeline ({n.timeline.length} posts)</span>
-              <div className="space-y-0 mt-3 max-h-72 overflow-y-auto pr-1">
-                {n.timeline.map((entry, i) => (
-                  <div key={entry.postId} className="flex items-start gap-3 text-[12px]">
-                    <div className="flex flex-col items-center flex-shrink-0 pt-1">
-                      <div className={`w-2 h-2 rounded-full ${
-                        entry.sentiment === 'positive' ? 'bg-nexus-positive' :
-                        entry.sentiment === 'negative' ? 'bg-nexus-negative' :
-                        'bg-nexus-accent-steel'
-                      }`} />
-                      {i < n.timeline.length - 1 && <div className="w-px h-10 bg-nexus-border" />}
-                    </div>
-                    <div className="pb-4 min-w-0 flex-1">
-                      <div className="flex items-center gap-2 text-nexus-muted mb-0.5">
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-nexus-surface-secondary border border-nexus-border">
-                          {PLATFORM_LABELS[entry.platform] || entry.platform}
-                        </span>
-                        <span>{fmtDate(entry.timestamp)}</span>
-                        <span className={
-                          entry.sentiment === 'positive' ? 'text-nexus-positive' :
-                          entry.sentiment === 'negative' ? 'text-nexus-negative' :
-                          'text-nexus-text-secondary'
-                        }>{entry.sentiment}</span>
-                        <span>{entry.emotion}</span>
-                      </div>
-                      <p className="text-nexus-text-secondary truncate">{entry.contentSnippet}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Link to Full Dossier */}
-          <div className="pt-2 flex justify-end">
-            <Link
-              href={`/narratives/${n.id}`}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-nexus-surface-secondary border border-nexus-border text-xs text-nexus-text-primary hover:border-nexus-accent/40 nexus-transition"
-            >
-              <span>View Full Dossier & Trajectory</span>
-              <ExternalLink className="w-3.5 h-3.5 text-nexus-muted" />
-            </Link>
-          </div>
-        </div>
+      {/* Narrative Compare Modal */}
+      {isCompareOpen && (
+        <NarrativeCompareModal
+          narratives={narratives}
+          initialNarrativeId={heroNarrativeId || undefined}
+          onClose={() => setIsCompareOpen(false)}
+        />
       )}
-    </div>
-  );
-}
-
-// ── Shift Bar ─────────────────────────────────────────────────────────────
-
-function ShiftBar({ label, value, weight }: { label: string; value: number | null; weight: string }) {
-  const width = value !== null ? Math.min(value, 100) : 0;
-  const color = value === null ? 'bg-nexus-border' : value >= 60 ? 'bg-nexus-negative' : value >= 30 ? 'bg-nexus-warning' : 'bg-nexus-positive';
-
-  return (
-    <div className="rounded-lg bg-nexus-surface-secondary/60 border border-nexus-border p-3">
-      <div className="flex items-center justify-between mb-1.5">
-        <div>
-          <span className="text-[11px] text-nexus-text-secondary">{label}</span>
-          <span className="text-[9px] text-nexus-muted ml-1.5">({weight})</span>
-        </div>
-        <span className={`text-[12px] font-medium nexus-metric ${
-          value === null ? 'text-nexus-muted' : value >= 60 ? 'text-nexus-negative' : value >= 30 ? 'text-nexus-warning' : 'text-nexus-positive'
-        }`}>
-          {metricDisplay(value)}
-        </span>
-      </div>
-      <div className="h-1 bg-nexus-border rounded-full overflow-hidden">
-        <div className={`h-full rounded-full nexus-transition ${color}`} style={{ width: `${width}%` }} />
-      </div>
-    </div>
+    </NexusLayout>
   );
 }

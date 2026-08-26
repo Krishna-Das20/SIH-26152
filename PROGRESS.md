@@ -77,7 +77,7 @@ If `ml/.venv` does not exist on your machine, see §7.
 | **C** | Demographics | 🔴 **regex only, no ML** | `src/lib/nlp/demographicProfiler.ts` |
 | **D** | Trends | 🟢 real z-score · 🟡 no forecast | `src/app/api/analytics/trends/` |
 | **E** | Link analysis | 🟢 real Louvain + Brandes | `src/lib/graph/` |
-| **N** | **Narrative Mutation** | 🟢 **flagship 4-vector tracker** | `src/lib/narratives/`, `src/app/narratives/` |
+| **N** | **Narrative Mutation** | 🟢 **Hero 8-Dimension Workstation & Evolution Map** | `src/lib/narratives/`, `src/components/narratives/`, `src/app/narratives/` |
 | **+** | **Cross-vector brief** | 🟢 **the differentiator** | `src/app/api/analytics/brief/` |
 
 **Component C is the known weak point.** It is regex and lexicons. It does not
