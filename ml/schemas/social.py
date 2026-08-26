@@ -245,3 +245,25 @@ class ModelsResponse(BaseModel):
     toxicity: str = ""
     embeddings: str = ""
     device: str = "cpu"
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  EMBEDDING SCHEMAS
+# ═══════════════════════════════════════════════════════════════════
+
+class EmbeddingRequest(BaseModel):
+    """POST /embeddings  —  request body."""
+
+    texts: list[str] = Field(
+        ...,
+        min_length=1,
+        description="List of texts to generate embeddings for.",
+    )
+
+
+class EmbeddingResponse(BaseModel):
+    """POST /embeddings  —  response body."""
+
+    embeddings: list[list[float]] = Field(default_factory=list)
+    model: str = ""
+    dimension: int = 0

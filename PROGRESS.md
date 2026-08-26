@@ -7,7 +7,7 @@
 > **Anyone pushing to `main` must update this file in the same push.** A stale
 > status file is worse than none — the next agent will act on it.
 
-**Last updated:** 2026-08-25 · **State as of:** `ecdd759` · **Branches:** `main` (stable) · `beta` (PR target)
+**Last updated:** 2026-08-26 · **State as of:** `beta` after PR #2 · **Branches:** `main` (stable) · `beta` (PR target)
 
 ---
 
@@ -77,6 +77,7 @@ If `ml/.venv` does not exist on your machine, see §7.
 | **D** | Trends | 🟢 real z-score · 🟡 no forecast | `src/app/api/analytics/trends/` |
 | **E** | Link analysis | 🟢 real Louvain + Brandes | `src/lib/graph/` |
 | **+** | **Cross-vector brief** | 🟢 **the differentiator** | `src/app/api/analytics/brief/` |
+| **+** | **Narrative mutation** | 🟢 merged from PR #2 · see §11 | `src/lib/narratives/` |
 
 **Component C is the known weak point.** It is regex and lexicons. It does not
 guess — unknown values return `null`, render as "Unknown", and the API reports
@@ -341,10 +342,65 @@ judge who catches an invented number discounts everything else.
 
 ---
 
+## 11. Narrative Mutation Tracker (PR #2, merged into `beta` 2026-08-26)
+
+@Rishiraj-De's second contribution. Embeds every post with all-MiniLM-L6-v2 via
+a new `POST /embeddings` endpoint on the ML service, clusters semantically
+similar posts with union-find, and scores how much each cluster changed between
+its earlier and later halves.
+
+| | |
+| :-- | :-- |
+| UI | `/narratives` (linked from the navbar) |
+| API | `/api/analytics/narratives`, `/[id]`, `/[id]/timeline` |
+| Core | `src/lib/narratives/` — clustering, mutations, titles, analyzer |
+| Tests | `npm run verify:narratives` — 39 assertions |
+| Docs | [`docs/narrative-mutation.md`](docs/narrative-mutation.md) |
+
+`mutation = 0.40·semantic + 0.25·sentiment + 0.20·emotion + 0.15·keyword`
+
+### Two fixes applied during merge — do not revert them
+
+**1. `MIN_STAGE_POSTS = 2` in `src/lib/narratives/mutations.ts`.**
+Three of the four components are *distribution* comparisons. With one post per
+stage there is no distribution: sentiment TVD collapses to exactly 0 or exactly
+100, the emotion "mode" is that single post's emotion, and two short comments
+never share a top-5 keyword so Jaccard pins at 100. Measured on the 352-post
+corpus, **all 18 two-post narratives had sentimentShift of exactly 0 or 100**,
+and those three components carry 60 of the 100 points — so unrelated comment
+*pairs* scored 60–72 while the one genuinely large narrative (69 posts) scored
+17. The ranking was measuring cluster smallness. Below the floor the components
+return `null`, which makes the composite `null` by the existing strict rule.
+
+**2. `MIN_NARRATIVE_POSTS_FOR_FINDING = 6` in the brief route.**
+Finding 7 previously took `narratives[0]` and asserted the narrative "changed
+meaningfully" — on this corpus that was a 2-post Instagram pair. The floor is
+about what the sentence claims, not whether the number computes. The `catch`
+now logs instead of swallowing, so a genuine bug in narrative code cannot hide
+behind a permanently-missing finding and a 200 response.
+
+### What it actually shows on the current corpus
+
+24 narratives, 2 with a composite score (18.3 and 17.1), 22 reading "N/A".
+**That is correct, not broken** — this corpus has no multi-post evolving
+narrative. The largest cluster is 69 posts spanning all three platforms and is
+almost entirely emoji reactions (🔥🔥, ❤️, 😍), which genuinely have not
+mutated: semantic shift 0, emotion shift 0.
+
+Because nothing clears 30, **the narrative finding does not appear in the brief
+on this corpus.** Demo the feature from `/narratives`, not from the brief. Do
+NOT lower the threshold to make a finding appear — that is the fabrication trap
+this project exists to avoid. The real fix is a corpus with actual discourse in
+it (more YouTube queries on one contested topic).
+
+---
+
 ## 10. Recent history
 
 | Commit | What changed |
 | :-- | :-- |
+| _(beta)_ | Merged PR #2 — Narrative Mutation Tracker from @Rishiraj-De, + 2 scoring fixes |
+| `a5af070` | Made `against`/`anxiety` reachable, decoupled stance from mood, rescore path |
 | `6e505a2` | PROGRESS.md handover note + pre-push hook enforcing it |
 | `b7d1415` | Reddit reports missing-credentials when the legacy gateway errors |
 | `cc8eaab` | Cross-vector brief + frozen corpus + network-independent demo |
