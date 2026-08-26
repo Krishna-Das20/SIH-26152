@@ -12,6 +12,7 @@
     "verify:tenancy": "tsx src/lib/__tests__/verify-tenancy.ts",
     "verify:narratives": "tsx src/lib/narratives/__tests__/verify-narratives.ts",
     "verify": "npm run verify:graph && npm run verify:connectors && npm run verify:tenancy && npm run verify:narratives",
+    "build:brief": "python scripts/build_brief_docx.py",
     "check:tokens": "node scripts/check-tokens.mjs",
     "get:meta-token": "node scripts/get-meta-token.mjs"
   },

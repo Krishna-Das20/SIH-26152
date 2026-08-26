@@ -1,13 +1,18 @@
 # PROGRESS.md — current status & where to start
 
 > **Read this first, then [AGENTS.md](AGENTS.md) for architecture.**
+> **Presenting?** [`docs/team-brief.md`](docs/team-brief.md) is the deck-building
+> brief — slide-by-slide content, the demo script, and rehearsed answers to the
+> questions judges ask. `docs/team-brief.docx` is the same content for Word;
+> the markdown is the source, so edit it and run `npm run build:brief` rather
+> than editing the .docx by hand.
 > This file is the handover note. AGENTS.md explains *how the system is built*;
 > this file explains *what state it is in right now and what to do next*.
 >
 > **Anyone pushing to `main` must update this file in the same push.** A stale
 > status file is worse than none — the next agent will act on it.
 
-**Last updated:** 2026-08-26 · **State as of:** `main` = `beta` = PR #2 merged · **Branches:** `main` (stable) · `beta` (PR target)
+**Last updated:** 2026-08-27 · **State as of:** `main` = `beta` = PR #2 merged · **Branches:** `main` (stable) · `beta` (PR target)
 
 ---
 
@@ -414,7 +419,9 @@ demoing this page.**
 
 | Commit | What changed |
 | :-- | :-- |
-| _(beta)_ | Merged PR #2 — Narrative Mutation Tracker from @Rishiraj-De, + 2 scoring fixes |
+| _(head)_ | Team brief for the internal round: `docs/team-brief.md` |
+| `b33f67d` | Narratives: stopped blaming the corpus for an unreachable ML service |
+| `acc8c40` | Merged PR #2 — Narrative Mutation Tracker from @Rishiraj-De, + 2 scoring fixes |
 | `a5af070` | Made `against`/`anxiety` reachable, decoupled stance from mood, rescore path |
 | `6e505a2` | PROGRESS.md handover note + pre-push hook enforcing it |
 | `b7d1415` | Reddit reports missing-credentials when the legacy gateway errors |
