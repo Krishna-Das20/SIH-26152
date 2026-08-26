@@ -22,17 +22,29 @@ logger = logging.getLogger(__name__)
 
 # GoEmotions → our schema mapping
 # The model outputs 28 labels; we aggregate them into our target set.
+# NOTE on two deliberate splits:
+#
+#   disapproval — previously folded into "anger". GoEmotions' `disapproval` is
+#   the precise signal for the problem statement's "against" stance, and
+#   collapsing it into anger made that dimension UNREACHABLE through the ML
+#   path: nothing downstream could ever emit `against`.
+#
+#   nervousness — previously folded into "fear". The problem statement names
+#   "anxiety" specifically, which is nervousness rather than acute fear, so the
+#   two are kept apart and mapped separately on the TypeScript side.
 _EMOTION_AGGREGATION: dict[str, list[str]] = {
-    "joy":        ["joy", "amusement", "gratitude", "pride", "relief"],
-    "sadness":    ["sadness", "grief", "disappointment", "remorse"],
-    "anger":      ["anger", "annoyance", "disapproval"],
-    "fear":       ["fear", "nervousness"],
-    "surprise":   ["surprise", "realization", "confusion"],
-    "disgust":    ["disgust"],
-    "excitement": ["excitement", "desire", "admiration"],
-    "love":       ["love", "caring"],
-    "optimism":   ["optimism", "approval"],
-    "curiosity":  ["curiosity"],
+    "joy":         ["joy", "amusement", "gratitude", "pride", "relief"],
+    "sadness":     ["sadness", "grief", "disappointment", "remorse"],
+    "anger":       ["anger", "annoyance"],
+    "disapproval": ["disapproval"],
+    "fear":        ["fear"],
+    "nervousness": ["nervousness"],
+    "surprise":    ["surprise", "realization", "confusion"],
+    "disgust":     ["disgust"],
+    "excitement":  ["excitement", "desire", "admiration"],
+    "love":        ["love", "caring"],
+    "optimism":    ["optimism", "approval"],
+    "curiosity":   ["curiosity"],
 }
 
 
@@ -48,6 +60,9 @@ class EmotionScore:
     love: float = 0.0
     optimism: float = 0.0
     curiosity: float = 0.0
+    # Split out so the "against" and "anxiety" dimensions are reachable.
+    disapproval: float = 0.0
+    nervousness: float = 0.0
     dominant_emotion: str = "neutral"
 
 
@@ -157,5 +172,7 @@ class EmotionAnalyzer:
             love=agg.get("love", 0.0),
             optimism=agg.get("optimism", 0.0),
             curiosity=agg.get("curiosity", 0.0),
+            disapproval=agg.get("disapproval", 0.0),
+            nervousness=agg.get("nervousness", 0.0),
             dominant_emotion=dominant,
         )

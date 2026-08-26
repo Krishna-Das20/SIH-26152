@@ -89,6 +89,10 @@ class EmotionResult(BaseModel):
     love: float = 0.0
     optimism: float = 0.0
     curiosity: float = 0.0
+    # Kept distinct from anger/fear so the consumer can express the problem
+    # statement's "against" and "anxiety" dimensions.
+    disapproval: float = 0.0
+    nervousness: float = 0.0
     dominant_emotion: str = "neutral"
 
 

@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { addPosts, getAllPosts, resetDataset } from '@/lib/store';
+import { addPosts, getAllPosts, resetDataset, rescoreLexiconPosts } from '@/lib/store';
 import { analyzeSentimentAndEmotion } from '@/lib/nlp/emotionEngine';
 import { inferDemographics } from '@/lib/nlp/demographicProfiler';
 import { SocialPost, PlatformType } from '@/types/intelligence';
-import { analyzeOne } from '@/lib/ml/client';
+import { analyzeOne, enrichPosts } from '@/lib/ml/client';
 import {
   ingestFrom,
   ingestFromAllConfigured,
@@ -32,6 +32,22 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({} as any));
     const { action, platform, customText } = body;
+
+    // Upgrade any posts still on lexicon scores (ingested while the ML
+    // service was unavailable) without re-fetching from the platforms.
+    if (action === 'rescore') {
+      const result = await rescoreLexiconPosts(enrichPosts);
+      return NextResponse.json({
+        success: true,
+        ...result,
+        message:
+          result.stale === 0
+            ? 'Nothing to re-score — every post already carries ML output.'
+            : result.upgraded > 0
+            ? `Re-scored ${result.upgraded} of ${result.stale} stale post(s).`
+            : `${result.stale} post(s) are on lexicon scores but none could be upgraded — is the ML service reachable?`,
+      });
+    }
 
     if (action === 'reset') {
       const resetData = await resetDataset();

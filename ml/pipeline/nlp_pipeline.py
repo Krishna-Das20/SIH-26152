@@ -236,6 +236,13 @@ class NLPAnalysisPipeline:
                         love=emo.love,
                         optimism=emo.optimism,
                         curiosity=emo.curiosity,
+                        # Carried through explicitly: this conversion enumerates
+                        # fields, so a new dimension added to EmotionScore is
+                        # silently dropped here unless listed. That is exactly
+                        # how disapproval/nervousness arrived as 0.0 while
+                        # dominant_emotion correctly reported them.
+                        disapproval=emo.disapproval,
+                        nervousness=emo.nervousness,
                         dominant_emotion=emo.dominant_emotion,
                     ),
                     sarcasm=SarcasmResult(

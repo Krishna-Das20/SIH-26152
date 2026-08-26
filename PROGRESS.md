@@ -194,16 +194,35 @@ ML service on `127.0.0.1`, so new ingestion there falls back to the lexicon.
 
 ---
 
+## 4d. ML batch sizing (matters on CPU)
+
+`ML_CHUNK_SIZE=12`, `ML_TIMEOUT_MS=90000` in `.env`.
+
+A timeout degrades the **whole request** to lexicon scores, so an oversized
+chunk silently costs every post in it. At chunk size 40 the rescue path aborted
+and left 40 posts on fallback quality with no error surfaced anywhere except
+`engineBreakdown`. Raise the chunk size only if you also verify
+`npm run check:tokens` and the `engineBreakdown` afterwards.
+
+Stuck on lexicon scores? Upgrade without re-fetching from the platforms:
+
+```bash
+curl -X POST http://localhost:3000/api/ingest   -H 'Content-Type: application/json' -d '{"action":"rescore"}'
+```
+
+---
+
 ## 5. Demo corpus
 
-`src/lib/frozenCorpus.json` — **352 real posts** (152 YouTube + 160 Instagram + 40 Telegram),
+`src/lib/frozenCorpus.json` — **352 real posts, 352/352 transformer-scored**
+(152 YouTube + 160 Instagram + 40 Telegram),
 all transformer-scored at capture, committed to the repo.
 
 This is a **real captured snapshot, not synthetic data**. It exists so the demo
 never depends on venue wi-fi, a live API, or YouTube's 10,000 units/day quota
 (`search.list` costs 100 units — a morning of rehearsals could exhaust it).
 
-Graph it produces: **301 accounts, 188 edges, 5 communities, modularity Q = 0.37**
+Graph it produces: **298 accounts, 174 edges, 5 communities, modularity Q = 0.28**
 (>0.3 indicates real community structure).
 
 To refresh it after ingesting more data:
@@ -306,10 +325,19 @@ judge who catches an invented number discounts everything else.
 3. **Never mock a platform to make it look live.** An honest gap beats a fake.
 4. **Tenant reads go through `src/lib/tenant.ts`.** Calling `getAllPosts()`
    directly in an analytics route is a cross-tenant data leak.
-5. **Reads open, writes guarded.** Ingestion routes spend real third-party
+5. **`against` and `anxiety` must stay reachable.** GoEmotions `disapproval`
+   maps to `against` and `nervousness` to `anxiety`. Folding them back into
+   `anger`/`fear` makes two dimensions the problem statement names structurally
+   impossible to emit. `ml/emotion/analyzer.py`, `ml/pipeline/nlp_pipeline.py`
+   and `src/lib/ml/client.ts` must all carry them — the pipeline enumerates
+   fields, so a new dimension is silently dropped unless listed there too.
+6. **Stance is a position, not a mood.** Fear, sadness and nervousness are
+   negative but express no stance. Do not rank polarity above the explicit
+   support/oppose signals in `deriveStance`.
+7. **Reads open, writes guarded.** Ingestion routes spend real third-party
    quota, so they require a session unless `PUBLIC_INGEST=true`. Do not remove
    the guard to make a deployment "just work".
-6. **Update this file before pushing.**
+8. **Update this file before pushing.**
 
 ---
 

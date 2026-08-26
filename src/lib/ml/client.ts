@@ -48,6 +48,10 @@ interface MlEmotion {
   love: number;
   optimism: number;
   curiosity: number;
+  /** GoEmotions `disapproval` — the signal behind the `against` stance. */
+  disapproval?: number;
+  /** GoEmotions `nervousness` — distinct from acute fear. */
+  nervousness?: number;
   dominant_emotion: string;
 }
 
@@ -88,7 +92,11 @@ const EMOTION_MAP: Record<string, EmotionType> = {
   joy: 'joy',
   sadness: 'sadness',
   anger: 'anger',
-  fear: 'anxiety',
+  // GoEmotions `disapproval` is the closest thing to an explicit "against"
+  // stance. Without this entry the `against` dimension was UNREACHABLE through
+  // the ML path -- only the lexicon fallback could ever produce it.
+  disapproval: 'against',
+  fear: 'fear',
   nervousness: 'anxiety',
   surprise: 'excitement',
   disgust: 'anger',
@@ -109,7 +117,9 @@ export function mapEmotion(mlEmotion: MlEmotion): EmotionType {
     ['joy', mlEmotion.joy],
     ['sadness', mlEmotion.sadness],
     ['anger', mlEmotion.anger],
+    ['disapproval', mlEmotion.disapproval ?? 0],
     ['fear', mlEmotion.fear],
+    ['nervousness', mlEmotion.nervousness ?? 0],
     ['surprise', mlEmotion.surprise],
     ['disgust', mlEmotion.disgust],
     ['excitement', mlEmotion.excitement],
@@ -127,13 +137,36 @@ export function mapEmotion(mlEmotion: MlEmotion): EmotionType {
  * "inferred stance", and a fine-tuned stance classifier is the real fix.
  */
 export function deriveStance(sentiment: MlSentiment, emotion: MlEmotion): StanceType {
-  const supportMass = emotion.love + emotion.optimism + emotion.joy + emotion.excitement;
-  const opposeMass = emotion.anger + emotion.disgust;
+  // Stance is a POSITION taken toward something, which is not the same as
+  // emotional valence. Fear, sadness and nervousness are negative but express
+  // no position: "I'm nervous about what happens if this fails" is worry, not
+  // opposition. Ranking polarity first made every strongly negative post
+  // 'opposing', which inflated the opposing share with anxious and grieving
+  // posts and made the supportive/opposing split meaningless.
+  //
+  // So the explicit stance signals are checked FIRST, and polarity is only a
+  // tiebreaker when a stance-bearing emotion is already present.
+  const supportMass = emotion.love + emotion.optimism + emotion.joy;
+  const opposeMass = emotion.anger + emotion.disgust + (emotion.disapproval ?? 0);
 
-  if (sentiment.label === 'positive' && sentiment.positive > 0.55) return 'supportive';
-  if (sentiment.label === 'negative' && sentiment.negative > 0.55) return 'opposing';
-  if (supportMass > opposeMass * 1.5 && supportMass > 0.3) return 'supportive';
-  if (opposeMass > supportMass * 1.5 && opposeMass > 0.3) return 'opposing';
+  // Emotions that carry no stance at all, however negative they are.
+  const stancelessMass =
+    emotion.fear + emotion.sadness + (emotion.nervousness ?? 0) + emotion.curiosity;
+
+  const STRONG = 0.4;
+
+  if (opposeMass >= STRONG && opposeMass > supportMass) return 'opposing';
+  if (supportMass >= STRONG && supportMass > opposeMass) return 'supportive';
+
+  // Neither stance signal is strong. If the dominant feeling is a stanceless
+  // one, say so rather than inferring a position from mood.
+  if (stancelessMass > Math.max(supportMass, opposeMass)) return 'neutral';
+
+  // Weak stance signal — let polarity break the tie, but only when some
+  // stance-bearing emotion is actually present.
+  if (supportMass > opposeMass && sentiment.positive > 0.6) return 'supportive';
+  if (opposeMass > supportMass && sentiment.negative > 0.6) return 'opposing';
+
   return 'neutral';
 }
 

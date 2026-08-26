@@ -165,11 +165,36 @@ export async function addPosts(newPosts: SocialPost[]): Promise<void> {
   // Telegram ingests reported "20 ingested" while the store stayed at zero,
   // because those ids existed in the frozen baseline but never in MongoDB.
   const existing = cache();
-  const existingIds = new Set(existing.map((p) => p.id));
-  const newToCache = newPosts.filter((p) => !existingIds.has(p.id));
+  const byId = new Map(existing.map((p) => [p.id, p]));
 
-  if (newToCache.length > 0) {
-    global._postsCache = normalise([...existing, ...newToCache]);
+  let added = 0;
+  let upgraded = 0;
+
+  for (const incoming of newPosts) {
+    const current = byId.get(incoming.id);
+
+    if (!current) {
+      byId.set(incoming.id, incoming);
+      added++;
+      continue;
+    }
+
+    // Re-ingesting an existing post used to be a no-op, which meant a post
+    // first scored by the lexicon fallback (ML service down at the time) could
+    // NEVER be upgraded — the corpus stayed permanently on fallback scores even
+    // after the transformers came back. Replace when the incoming analysis is
+    // from a better engine.
+    if (current.sentiment.engine !== 'ml' && incoming.sentiment.engine === 'ml') {
+      byId.set(incoming.id, incoming);
+      upgraded++;
+    }
+  }
+
+  if (added > 0 || upgraded > 0) {
+    global._postsCache = normalise(Array.from(byId.values()));
+    if (upgraded > 0) {
+      console.log(`Re-scored ${upgraded} post(s) from lexicon to transformer output.`);
+    }
   }
 
   const db = await getDatabase();
@@ -243,4 +268,37 @@ export async function getPostsForUser(userId: string): Promise<SocialPost[]> {
   }
 
   return cache().filter((p) => p.ownerUserId === userId);
+}
+
+/**
+ * Re-scores every post still carrying lexicon output through the ML service.
+ *
+ * Posts ingested while the transformer service was down (or still loading)
+ * keep their fallback scores forever: re-ingesting the same source produces
+ * the same ids, and an upsert of identical content will not change the stored
+ * sentiment. Without this, a corpus can be permanently stuck on fallback
+ * quality with no way to notice except reading `engineBreakdown`.
+ *
+ * Returns how many were upgraded.
+ */
+export async function rescoreLexiconPosts(
+  enrich: (posts: SocialPost[]) => Promise<SocialPost[]>
+): Promise<{ examined: number; stale: number; upgraded: number }> {
+  const all = await getAllPosts();
+  const stale = all.filter((p) => p.sentiment.engine !== 'ml');
+
+  // Report `stale` separately from `upgraded`: "none were stale" and "some
+  // were stale but none could be upgraded" are different outcomes and were
+  // previously indistinguishable in the response.
+  if (stale.length === 0) return { examined: all.length, stale: 0, upgraded: 0 };
+
+  const rescored = await enrich(stale);
+  const improved = rescored.filter((p) => p.sentiment.engine === 'ml');
+
+  if (improved.length > 0) {
+    // addPosts upgrades in the cache and upserts to the database.
+    await addPosts(improved);
+  }
+
+  return { examined: all.length, stale: stale.length, upgraded: improved.length };
 }
