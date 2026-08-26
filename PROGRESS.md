@@ -7,7 +7,7 @@
 > **Anyone pushing to `main` must update this file in the same push.** A stale
 > status file is worse than none — the next agent will act on it.
 
-**Last updated:** 2026-08-25 · **State as of:** `ecdd759` · **Branches:** `main` (stable) · `beta` (PR target)
+**Last updated:** 2026-08-26 · **State as of:** `NEXUS UI Redesign & Narrative Mutation Tracker` · **Branches:** `main` (stable) · `beta` (PR target)
 
 ---
 
@@ -40,8 +40,9 @@ demo — that is the whole reason this branch exists.
 | **Next deadline** | **Internal hackathon — 29/30 Aug 2026** |
 | **After that** | Idea submission 20 Sept · Grand Finale Dec 2026 (36h) |
 | **Demo state** | ✅ Runnable, network-independent, no login required |
-| **Build** | ✅ `npm run build` clean, 20 routes |
-| **Tests** | ✅ `npm run verify` — 3 suites, all passing |
+| **Build** | ✅ `npm run build` clean, 29 routes |
+| **Tests** | ✅ `npm run verify` — 4 suites (graph, connectors, tenancy, narratives), all passing |
+| **UI Design** | ✅ NEXUS Premium Intelligence UI (Apple/Linear/Palantir restraint) |
 
 ### Right now the demo works like this
 
@@ -60,14 +61,14 @@ cd ml && .venv/Scripts/python.exe -m uvicorn main:app --port 8000
 npm run dev            # http://localhost:3000
 
 # confirm
-npm run verify         # 3 suites: graph algorithms, connectors, tenancy
+npm run verify         # 4 suites: graph algorithms, connectors, tenancy, narratives
 ```
 
 If `ml/.venv` does not exist on your machine, see §7.
 
 ---
 
-## 3. The five components — honest status
+## 3. The six components — honest status
 
 | | Component | State | Where |
 | :-- | :-- | :-- | :-- |
@@ -76,6 +77,7 @@ If `ml/.venv` does not exist on your machine, see §7.
 | **C** | Demographics | 🔴 **regex only, no ML** | `src/lib/nlp/demographicProfiler.ts` |
 | **D** | Trends | 🟢 real z-score · 🟡 no forecast | `src/app/api/analytics/trends/` |
 | **E** | Link analysis | 🟢 real Louvain + Brandes | `src/lib/graph/` |
+| **N** | **Narrative Mutation** | 🟢 **flagship 4-vector tracker** | `src/lib/narratives/`, `src/app/narratives/` |
 | **+** | **Cross-vector brief** | 🟢 **the differentiator** | `src/app/api/analytics/brief/` |
 
 **Component C is the known weak point.** It is regex and lexicons. It does not

@@ -1,275 +1,256 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Navbar } from '@/components/Navbar';
-import { OverviewMetrics } from '@/components/OverviewMetrics';
-import { PageAnalyzerInput } from '@/components/PageAnalyzerInput';
-import { PlatformStatusPanel } from '@/components/PlatformStatusPanel';
-import { AudienceIntelligenceBrief } from '@/components/AudienceIntelligenceBrief';
-import { TimelineScrubber } from '@/components/TimelineScrubber';
-import { NetworkGraphView } from '@/components/NetworkGraphView';
-import { SentimentEmotionView } from '@/components/SentimentEmotionView';
-import { DemographicRadarView } from '@/components/DemographicRadarView';
-import { TrendTopicDetector } from '@/components/TrendTopicDetector';
-import { LiveFeedStream } from '@/components/LiveFeedStream';
-import { NodeDetailsDrawer } from '@/components/NodeDetailsDrawer';
-import { GraphNode, SocialPost, NetworkTopology, PlatformType } from '@/types/intelligence';
+import { NexusLayout, TopBar, MetricCard, SectionHeader } from '@/components/nexus';
+import { BarChart3, Users, TrendingUp, AlertTriangle, Activity, FileText } from 'lucide-react';
+import { SocialPost, NetworkTopology, PlatformType } from '@/types/intelligence';
 
-export default function Dashboard() {
-  const [activePlatform, setActivePlatform] = useState('all');
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Timeline State
-  const [startTime, setStartTime] = useState('2026-08-25T00:00:00.000Z');
-  const [endTime, setEndTime] = useState('2026-08-25T23:59:59.000Z');
-  const [currentTime, setCurrentTime] = useState('2026-08-25T23:59:59.000Z');
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
-
-  // Data States
+export default function OverviewPage() {
   const [metrics, setMetrics] = useState({
-    totalPosts: 0,
-    activeNodes: 0,
-    averageSentiment: 0,
-    sarcasmIndex: 0,
-    threatLevel: 'LOW',
-    supportivePercentage: 0,
-    opposingPercentage: 0
+    totalPosts: 0, activeNodes: 0, averageSentiment: 0, sarcasmIndex: 0,
+    threatLevel: 'LOW', supportivePercentage: 0, opposingPercentage: 0,
+    platformBreakdown: {} as Record<string, number>,
   });
-
-  const [topology, setTopology] = useState<NetworkTopology>({
-    nodes: [],
-    links: [],
-    communities: [],
-    topKOLs: []
-  });
-
   const [sentimentData, setSentimentData] = useState({
-    emotionRadar: [],
+    emotionRadar: [] as { emotion: string; value: number; rawCount: number }[],
     sarcasmRate: 0,
-    stanceDistribution: [],
-    temporalTimeline: []
+    stanceDistribution: [] as { name: string; value: number }[],
+    temporalTimeline: [] as any[],
   });
+  const [trends, setTrends] = useState<any[]>([]);
+  const [narrativeCount, setNarrativeCount] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const [demographicData, setDemographicData] = useState({
-    ageGroups: [],
-    geographicDistribution: [],
-    languages: [],
-    interestClusters: []
-  });
-
-  const [trends, setTrends] = useState([]);
-  const [feedPosts, setFeedPosts] = useState<SocialPost[]>([]);
-  const [engineBreakdown, setEngineBreakdown] = useState({ ml: 0, lexicon: 0 });
-  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
-
-  // Fetch Analytics across all endpoints
-  const fetchAnalytics = useCallback(async (timeCutoff?: string, platformFilter?: string) => {
+  const fetchAll = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
     try {
-      const p = platformFilter || activePlatform;
-      const t = timeCutoff || currentTime;
-      const query = `?cutoffTime=${encodeURIComponent(t)}&platform=${p}`;
-
-      const [overviewRes, graphRes, sentimentRes, demoRes, trendsRes, postsRes] = await Promise.all([
-        fetch(`/api/analytics/overview${query}`).then(r => r.json()),
-        fetch(`/api/analytics/graph${query}`).then(r => r.json()),
-        fetch(`/api/analytics/sentiment${query}`).then(r => r.json()),
-        fetch(`/api/analytics/demographics${query}`).then(r => r.json()),
-        fetch(`/api/analytics/trends${query}`).then(r => r.json()),
-        fetch(`/api/posts${query}&limit=100`).then(r => r.json())
+      const [overviewRes, sentRes, trendsRes, narrativeRes] = await Promise.all([
+        fetch('/api/analytics/overview').then(r => r.json()),
+        fetch('/api/analytics/sentiment').then(r => r.json()),
+        fetch('/api/analytics/trends').then(r => r.json()),
+        fetch('/api/analytics/narratives').then(r => r.json()).catch(() => null),
       ]);
-
-      if (overviewRes && !overviewRes.error) {
-        setMetrics(overviewRes);
-      }
-      if (graphRes?.topology) {
-        setTopology(graphRes.topology);
-      }
-      if (sentimentRes && !sentimentRes.error) {
-        setSentimentData(sentimentRes);
-      }
-      if (demoRes && !demoRes.error) {
-        setDemographicData(demoRes);
-      }
-      if (postsRes?.posts) {
-        setFeedPosts(postsRes.posts);
-        setEngineBreakdown(postsRes.engineBreakdown || { ml: 0, lexicon: 0 });
-      }
-      if (trendsRes?.trends) {
-        setTrends(trendsRes.trends);
-      }
+      if (overviewRes && !overviewRes.error) setMetrics(overviewRes);
+      if (sentRes && !sentRes.error) setSentimentData(sentRes);
+      if (trendsRes?.trends) setTrends(trendsRes.trends);
+      if (narrativeRes?.narratives) setNarrativeCount(narrativeRes.narratives.length);
     } catch (e) {
-      console.error('Failed to load intelligence analytics:', e);
-    }
-  }, [activePlatform, currentTime]);
-
-  // Initial Load
-  useEffect(() => {
-    fetchAnalytics();
-  }, [fetchAnalytics]);
-
-  // Playback Simulation Interval
-  useEffect(() => {
-    if (!isPlaying) return;
-
-    const interval = setInterval(() => {
-      setCurrentTime(prev => {
-        const currentMs = new Date(prev).getTime();
-        const startMs = new Date(startTime).getTime();
-        const endMs = new Date(endTime).getTime();
-
-        const stepMs = 15 * 60 * 1000 * playbackSpeed;
-        let nextMs = currentMs + stepMs;
-
-        if (nextMs >= endMs) {
-          setIsPlaying(false);
-          return endTime;
-        }
-
-        const nextIso = new Date(nextMs).toISOString();
-        fetchAnalytics(nextIso, activePlatform);
-        return nextIso;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [isPlaying, playbackSpeed, startTime, endTime, activePlatform, fetchAnalytics]);
-
-  // Trigger Live Ingestion
-  const handleTriggerIngestion = async (subreddit: string = 'india') => {
-    setIsLoading(true);
-    try {
-      await fetch('/api/ingest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subreddit })
-      });
-      await fetchAnalytics();
-    } catch (e) {
-      console.error('Ingestion failed:', e);
+      console.error('Failed to load analytics:', e);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
+      setRefreshing(false);
     }
+  }, []);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const threatColors: Record<string, string> = {
+    LOW: 'text-nexus-positive',
+    ELEVATED: 'text-nexus-warning',
+    HIGH: 'text-nexus-negative',
+    CRITICAL: 'text-nexus-negative',
   };
 
-  // Reset Dataset
-  const handleResetDataset = async () => {
-    setIsLoading(true);
-    try {
-      await fetch('/api/ingest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'reset' })
-      });
-      setCurrentTime(endTime);
-      await fetchAnalytics();
-    } catch (e) {
-      console.error('Reset failed:', e);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const topEmotions = sentimentData.emotionRadar
+    .filter(e => e.rawCount > 0)
+    .sort((a, b) => b.rawCount - a.rawCount)
+    .slice(0, 4);
 
-  // Manual Ingest Inject
-  const handleManualPostSubmit = async (text: string, platform: PlatformType) => {
-    setIsLoading(true);
-    try {
-      await fetch('/api/ingest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'custom', customText: text, platform })
-      });
-      await fetchAnalytics();
-    } catch (e) {
-      console.error('Post injection failed:', e);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const emergingTrends = trends
+    .filter((t: any) => t.isSpike || (t.zScore && t.zScore > 0))
+    .slice(0, 5);
 
   return (
-    <div className="min-h-screen bg-[#07090e] pb-16">
-      
-      {/* 1. Header & Auth State */}
-      <Navbar
-        activePlatform={activePlatform}
-        onPlatformChange={(p) => {
-          setActivePlatform(p);
-          fetchAnalytics(currentTime, p);
-        }}
-        onTriggerIngestion={handleTriggerIngestion}
-        onResetDataset={handleResetDataset}
-        isLoading={isLoading}
-        threatLevel={metrics.threatLevel}
+    <NexusLayout>
+      <TopBar
+        title="Social Intelligence"
+        subtitle="See what people are saying. Understand why the conversation is changing."
+        onRefresh={() => fetchAll(true)}
+        refreshing={refreshing}
       />
 
-      <main className="max-w-7xl mx-auto px-4 pt-6">
-        
-        {/* 2. Top-Level KPIs */}
-        <OverviewMetrics metrics={metrics} />
+      <main className="px-8 py-6">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <Activity className="w-6 h-6 text-nexus-muted animate-pulse mx-auto mb-3" />
+              <p className="text-nexus-text-secondary text-sm">Loading intelligence…</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* KPI Metrics */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <MetricCard
+                label="Posts Analyzed"
+                value={metrics.totalPosts.toLocaleString()}
+                icon={<BarChart3 className="w-4 h-4" strokeWidth={1.5} />}
+                subtitle={`${Object.entries(metrics.platformBreakdown || {}).filter(([, v]) => v > 0).map(([k, v]) => `${v} ${k}`).join(' · ') || 'No platform data'}`}
+              />
+              <MetricCard
+                label="Active Accounts"
+                value={metrics.activeNodes.toLocaleString()}
+                icon={<Users className="w-4 h-4" strokeWidth={1.5} />}
+              />
+              <MetricCard
+                label="Active Narratives"
+                value={narrativeCount !== null ? narrativeCount.toString() : '—'}
+                icon={<TrendingUp className="w-4 h-4" strokeWidth={1.5} />}
+                subtitle={narrativeCount === null ? 'ML service required' : undefined}
+              />
+              <MetricCard
+                label="Threat Assessment"
+                value={metrics.threatLevel}
+                icon={<AlertTriangle className="w-4 h-4" strokeWidth={1.5} />}
+                subtitle={`Sentiment: ${metrics.averageSentiment > 0 ? '+' : ''}${metrics.averageSentiment}`}
+              />
+            </div>
 
-        {/* 3. Real Target Page / Channel OSINT Scraper (Zero Dummy Data) */}
-        <PageAnalyzerInput onAnalyzeSuccess={() => fetchAnalytics()} />
+            {/* Two-column: Sentiment + Trends */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              {/* Sentiment Overview */}
+              <div className="nexus-surface rounded-xl p-6">
+                <SectionHeader title="Sentiment Distribution" />
+                <div className="space-y-3">
+                  {sentimentData.stanceDistribution.map((item) => {
+                    const total = sentimentData.stanceDistribution.reduce((s, i) => s + i.value, 0) || 1;
+                    const pct = Math.round((item.value / total) * 100);
+                    const color = item.name.includes('Supportive')
+                      ? 'bg-nexus-positive'
+                      : item.name.includes('Opposing')
+                      ? 'bg-nexus-negative'
+                      : 'bg-nexus-accent-steel';
+                    return (
+                      <div key={item.name}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[12px] text-nexus-text-secondary">{item.name}</span>
+                          <span className="text-[12px] font-medium text-nexus-text-primary nexus-metric">{pct}%</span>
+                        </div>
+                        <div className="h-1.5 bg-nexus-surface-secondary rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
 
-        {/* The fusion layer the problem statement calls "the key" — placed first
-            because a combined finding is the headline, not a supporting detail. */}
-        <AudienceIntelligenceBrief cutoffTime={currentTime} platform={activePlatform} />
+                {/* Top Emotions */}
+                <div className="mt-6 pt-4 border-t border-nexus-border">
+                  <span className="nexus-label">Dominant Emotions</span>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {topEmotions.map((e) => (
+                      <span
+                        key={e.emotion}
+                        className="text-[11px] px-2.5 py-1 rounded-md bg-nexus-surface-secondary text-nexus-text-secondary border border-nexus-border"
+                      >
+                        {e.emotion} <span className="text-nexus-muted">({e.rawCount})</span>
+                      </span>
+                    ))}
+                    {topEmotions.length === 0 && (
+                      <span className="text-[11px] text-nexus-muted italic">No emotion data</span>
+                    )}
+                  </div>
+                </div>
+              </div>
 
-        {/* Component A: honest, runtime-checked coverage of all six platforms */}
-        <PlatformStatusPanel />
+              {/* Emerging Trends */}
+              <div className="nexus-surface rounded-xl p-6">
+                <SectionHeader title="Emerging Trends" />
+                {emergingTrends.length > 0 ? (
+                  <div className="space-y-3">
+                    {emergingTrends.map((trend: any, i: number) => {
+                      const keyword = trend.keyword || trend.topic || 'Unknown';
+                      const count = trend.postCount || trend.count || 0;
+                      const score = trend.sentimentScore !== undefined ? trend.sentimentScore : 0;
+                      const isPositive = score > 0.1;
+                      const isNegative = score < -0.1;
 
-        {/* 4. Component A & D: Chronological Timeline Scrubber */}
-        <TimelineScrubber
-          startTime={startTime}
-          endTime={endTime}
-          currentTime={currentTime}
-          onTimeChange={(t) => {
-            setCurrentTime(t);
-            fetchAnalytics(t, activePlatform);
-          }}
-          isPlaying={isPlaying}
-          onTogglePlay={() => setIsPlaying(!isPlaying)}
-          playbackSpeed={playbackSpeed}
-          onSpeedChange={(s) => setPlaybackSpeed(s)}
-        />
+                      return (
+                        <div
+                          key={trend.id || keyword || i}
+                          className="flex items-center justify-between py-2.5 border-b border-nexus-border last:border-0"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-[11px] font-mono text-nexus-muted w-5">
+                              {String(i + 1).padStart(2, '0')}
+                            </span>
+                            <div>
+                              <p className="text-[13px] text-nexus-text-primary font-medium">
+                                {keyword}
+                              </p>
+                              <p className="text-[11px] text-nexus-muted">
+                                {count} mentions {trend.isSpike ? '· Spike' : trend.zScore ? `· z=${trend.zScore.toFixed(1)}` : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className={`text-xs font-medium nexus-metric ${
+                              isPositive ? 'text-nexus-positive' :
+                              isNegative ? 'text-nexus-negative' :
+                              'text-nexus-text-secondary'
+                            }`}>
+                              {score > 0 ? '+' : ''}{score.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[12px] text-nexus-muted py-4">
+                    No emerging trends detected in the current corpus.
+                  </p>
+                )}
+              </div>
+            </div>
 
-        {/* 5. Component E: Link Analysis & Force-Directed Network Graph */}
-        <NetworkGraphView
-          topology={topology}
-          onSelectNode={(node) => setSelectedNode(node)}
-          selectedNode={selectedNode}
-        />
+            {/* Platform Breakdown */}
+            <div className="nexus-surface rounded-xl p-6 mb-8">
+              <SectionHeader title="Platform Coverage" />
+              <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
+                {['youtube', 'telegram', 'x', 'reddit', 'instagram', 'facebook'].map(platform => {
+                  const count = (metrics.platformBreakdown || {})[platform] || 0;
+                  return (
+                    <div key={platform} className="text-center py-3 rounded-lg bg-nexus-surface-secondary/50 border border-nexus-border">
+                      <span className="text-lg font-semibold text-nexus-text-primary nexus-metric">{count}</span>
+                      <p className="text-[10px] text-nexus-muted uppercase tracking-wider mt-1">
+                        {platform === 'x' ? 'X' : platform.charAt(0).toUpperCase() + platform.slice(1)}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
-        {/* 6. Component B: Multi-Dimensional Sentiment, Emotion Radar & Sarcasm Timeline */}
-        <SentimentEmotionView data={sentimentData} />
-
-        {/* 7. Component C: Automated Demographic Profiling (Age, Geo, Language, Interests) */}
-        <DemographicRadarView data={demographicData} />
-
-        {/* 8. Component D: Real-Time Trend & Viral Topic Detection */}
-        <TrendTopicDetector
-          trends={trends}
-          onSelectTopic={(topic) => {
-            // Filter by topic
-          }}
-        />
-
-        {/* 9. Component A: Multi-Platform Ingestion Feed & Custom Injection */}
-        <LiveFeedStream
-          posts={feedPosts}
-          engineBreakdown={engineBreakdown}
-          onManualPostSubmit={handleManualPostSubmit}
-          isLoading={isLoading}
-        />
-
+            {/* Sarcasm Index */}
+            <div className="nexus-surface rounded-xl p-6">
+              <SectionHeader title="Signal Quality" />
+              <div className="grid grid-cols-3 gap-6">
+                <div>
+                  <span className="nexus-label">Sarcasm Index</span>
+                  <p className="text-xl font-semibold text-nexus-text-primary nexus-metric mt-1">
+                    {metrics.sarcasmIndex}%
+                  </p>
+                  <p className="text-[11px] text-nexus-muted mt-0.5">of posts flagged as sarcastic</p>
+                </div>
+                <div>
+                  <span className="nexus-label">Supportive</span>
+                  <p className="text-xl font-semibold text-nexus-positive nexus-metric mt-1">
+                    {metrics.supportivePercentage}%
+                  </p>
+                </div>
+                <div>
+                  <span className="nexus-label">Opposing</span>
+                  <p className="text-xl font-semibold text-nexus-negative nexus-metric mt-1">
+                    {metrics.opposingPercentage}%
+                  </p>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </main>
-
-      {/* 10. Component E: Node Dossier Inspection Drawer */}
-      <NodeDetailsDrawer
-        node={selectedNode}
-        onClose={() => setSelectedNode(null)}
-      />
-
-    </div>
+    </NexusLayout>
   );
 }
