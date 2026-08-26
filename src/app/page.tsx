@@ -17,6 +17,9 @@ import {
   Radio,
   ArrowUpRight,
   Info,
+  CheckCircle2,
+  AlertCircle,
+  ArrowRight,
 } from 'lucide-react';
 import { SocialPost, PlatformType } from '@/types/intelligence';
 
@@ -145,6 +148,9 @@ export default function OverviewPage() {
   const [posts, setPosts] = useState<SocialPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [ingestInput, setIngestInput] = useState('');
+  const [ingesting, setIngesting] = useState(false);
+  const [ingestStatus, setIngestStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const fetchPlatformData = useCallback(
     async (platform: PlatformTab, isRefresh = false) => {
@@ -152,6 +158,11 @@ export default function OverviewPage() {
       else setLoading(true);
 
       try {
+        // When user explicitly clicks Refresh, trigger re-clustering & re-analysis on latest posts
+        if (isRefresh) {
+          await fetch('/api/analytics/narratives', { method: 'POST' }).catch(() => null);
+        }
+
         const queryParam = platform !== 'all' ? `?platform=${platform}` : '';
         const postQuery = platform !== 'all' ? `?platform=${platform}&limit=100` : '?limit=100';
 
@@ -177,6 +188,45 @@ export default function OverviewPage() {
     },
     []
   );
+
+  const handleLiveIngest = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const target = ingestInput.trim();
+    if (!target) return;
+
+    setIngesting(true);
+    setIngestStatus(null);
+
+    try {
+      const res = await fetch('/api/analyze/page', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target, platform: activeTab !== 'all' ? activeTab : undefined }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.scrapedCount > 0) {
+        setIngestStatus({
+          type: 'success',
+          text: `Captured & ML-scored ${data.scrapedCount} new post from ${data.platform}!`,
+        });
+        setIngestInput('');
+        await fetchPlatformData(activeTab, true);
+      } else {
+        setIngestStatus({
+          type: 'error',
+          text: data.message || data.error || 'Failed to ingest target.',
+        });
+      }
+    } catch (err: any) {
+      setIngestStatus({
+        type: 'error',
+        text: err.message || 'Ingestion request failed.',
+      });
+    } finally {
+      setIngesting(false);
+    }
+  };
 
   useEffect(() => {
     fetchPlatformData(activeTab);
@@ -327,6 +377,127 @@ export default function OverviewPage() {
               </Link>
             </div>
           </div>
+        </div>
+
+        {/* Live Ingestion & Reel Capture Bar */}
+        <div className="nexus-surface rounded-2xl p-5 mb-8 border border-nexus-border">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-[11px] font-mono uppercase text-nexus-accent flex items-center gap-1.5 font-bold">
+              <Zap className="w-3.5 h-3.5" />
+              <span>Live Intercept & Ingestion Console</span>
+            </span>
+            <span className="text-[10px] text-nexus-muted font-mono">
+              Direct Reel, Video, or Channel Targeting
+            </span>
+          </div>
+
+          <form onSubmit={handleLiveIngest} className="flex flex-col sm:flex-row items-center gap-2.5">
+            <div className="relative flex-1 w-full">
+              <input
+                type="text"
+                placeholder={
+                  activeTab === 'instagram'
+                    ? 'Paste Instagram Reel or Post URL (e.g. https://www.instagram.com/reel/...)'
+                    : activeTab === 'youtube'
+                    ? 'Paste YouTube Video URL or ID (e.g. https://www.youtube.com/watch?v=...)'
+                    : activeTab === 'telegram'
+                    ? 'Enter Telegram public channel name (e.g. durov, telegram)'
+                    : 'Paste any Reel, Video, Channel, or #hashtag to ingest live…'
+                }
+                value={ingestInput}
+                onChange={(e) => setIngestInput(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-nexus-surface-secondary border border-nexus-border text-xs text-nexus-text-primary placeholder:text-nexus-muted focus:outline-none focus:border-nexus-accent transition-all shadow-inner font-mono"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={ingesting || !ingestInput.trim()}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-nexus-accent text-nexus-bg text-xs font-bold hover:bg-nexus-accent/90 transition-all flex items-center justify-center gap-2 shadow-md shadow-nexus-accent/15 disabled:opacity-40 flex-shrink-0"
+            >
+              {ingesting ? (
+                <>
+                  <Activity className="w-3.5 h-3.5 animate-spin" />
+                  <span>Intercepting & Scoring…</span>
+                </>
+              ) : (
+                <>
+                  <span>Ingest & Analyze</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Quick Suggestions */}
+          <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-nexus-border/60 text-[11px]">
+            <span className="text-nexus-muted">Quick test:</span>
+            {activeTab === 'instagram' || activeTab === 'all' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIngestInput('https://www.instagram.com/reel/DcHEonOvCLB/')}
+                  className="px-2 py-0.5 rounded bg-nexus-surface-secondary text-nexus-text-secondary hover:text-nexus-text-primary border border-nexus-border font-mono text-[10px] transition-colors"
+                >
+                  reel/DcHEonOvCLB
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIngestInput('https://www.instagram.com/p/Dbq0GvDv1q_/')}
+                  className="px-2 py-0.5 rounded bg-nexus-surface-secondary text-nexus-text-secondary hover:text-nexus-text-primary border border-nexus-border font-mono text-[10px] transition-colors"
+                >
+                  post/Dbq0GvDv1q_
+                </button>
+              </>
+            ) : null}
+
+            {activeTab === 'telegram' || activeTab === 'all' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIngestInput('durov')}
+                  className="px-2 py-0.5 rounded bg-nexus-surface-secondary text-nexus-text-secondary hover:text-nexus-text-primary border border-nexus-border font-mono text-[10px] transition-colors"
+                >
+                  t.me/durov
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIngestInput('telegram')}
+                  className="px-2 py-0.5 rounded bg-nexus-surface-secondary text-nexus-text-secondary hover:text-nexus-text-primary border border-nexus-border font-mono text-[10px] transition-colors"
+                >
+                  t.me/telegram
+                </button>
+              </>
+            ) : null}
+
+            {activeTab === 'youtube' || activeTab === 'all' ? (
+              <button
+                type="button"
+                onClick={() => setIngestInput('https://www.youtube.com/watch?v=DmFGE-DBQvY')}
+                className="px-2 py-0.5 rounded bg-nexus-surface-secondary text-nexus-text-secondary hover:text-nexus-text-primary border border-nexus-border font-mono text-[10px] transition-colors"
+              >
+                yt/DmFGE-DBQvY
+              </button>
+            ) : null}
+          </div>
+
+          {/* Feedback banner */}
+          {ingestStatus && (
+            <div
+              className={`mt-3 p-3 rounded-xl border flex items-center gap-2 text-xs animate-in fade-in ${
+                ingestStatus.type === 'success'
+                  ? 'bg-nexus-positive/10 border-nexus-positive/30 text-nexus-positive'
+                  : 'bg-nexus-negative/10 border-nexus-negative/30 text-nexus-negative'
+              }`}
+            >
+              {ingestStatus.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              )}
+              <span>{ingestStatus.text}</span>
+            </div>
+          )}
         </div>
 
         {loading ? (
