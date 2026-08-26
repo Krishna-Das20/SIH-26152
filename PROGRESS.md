@@ -76,7 +76,7 @@ If `ml/.venv` does not exist on your machine, see §7.
 
 | | Component | State | Where |
 | :-- | :-- | :-- | :-- |
-| **A** | Ingestion & timeline | 🟢 **4 of 6 working** (YT, TG, IG, FB*) | `src/lib/ingestion/` |
+| **A** | Ingestion & timeline | 🟡 **2 of 6 working** (YT, TG) — IG/FB revoked, see §4c | `src/lib/ingestion/` |
 | **B** | Sentiment & emotion | 🟢 4 real transformers | `ml/`, `src/lib/ml/client.ts` |
 | **C** | Demographics | 🔴 **regex only, no ML** | `src/lib/nlp/demographicProfiler.ts` |
 | **D** | Trends | 🟢 real z-score · 🟡 no forecast | `src/app/api/analytics/trends/` |
@@ -99,8 +99,8 @@ credentials. Check at runtime: `GET /api/platforms`.
 | :-- | :-- | :-- | :-- |
 | Telegram | Essential | 🟢 **live** | none — public channels need no credentials |
 | YouTube | Appreciable | 🟢 **live** | none — API key configured |
-| Instagram | Desirable | 🟢 **live** | permanent Page token · @bbsrgotlatent, 160 posts ingested |
-| Facebook | Desirable | 🟡 **token valid, feed blocked** | needs `pages_read_user_content` — see §4c |
+| Instagram | Desirable | 🔴 **token revoked 2026-08-27** | page scopes withdrawn — see §4c. 160 posts already in the frozen corpus |
+| Facebook | Desirable | 🔴 **token revoked 2026-08-27** | same token, same cause — see §4c |
 | Reddit | Appreciable | 🔴 blocked on review | Gated by Responsible Builder Policy; Devvit RFC in `docs/devvit-integration.md` |
 | X (Twitter) | Essential | 🔴 needs funding | pay-per-call since Feb 2026, ~$24/mo at demo volume |
 
@@ -132,7 +132,65 @@ anything configured is dead. Run it before every rehearsal.
 
 ---
 
-## 4c. Meta setup — resolved 2026-08-26
+## 4c. Meta tokens — REVOKED 2026-08-27
+
+`npm run check:tokens` now reports Instagram and Facebook as dead. The failing
+call returns:
+
+> `(#190) OAuthException — Any of the pages_read_engagement,
+> pages_manage_metadata, pages_read_user_content, pages_manage_ads,
+> pages_show_list or pages_messaging permission(s) must be granted before
+> impersonating a user's page.`
+
+This is **not** an expiry, and not a scope problem either. The root cause is one
+level up:
+
+> **The Meta developer account itself is blocked.**
+> `developers.facebook.com` redirects to a "Developer Platform Blocked User
+> Error" page reading: *"Account confirmation needed — We've noticed unusual
+> activity on this developer account. Please complete the confirmation steps to
+> regain access."*
+
+Every app token dies while the developer account behind the app is blocked,
+which is why even `/me` returns 190. The app "SIH" still shows as **Active** in
+the account's Business Integrations — the connection was never removed. There is
+nothing to fix in `.env` or in the code.
+
+### Likely trigger — do not repeat it
+
+The OAuth flow was driven through **browser automation**, followed by scripted
+token-exchange calls in quick succession. That is a close match for the pattern
+Meta's anti-abuse systems flag as unusual activity. **Do the Meta OAuth steps by
+hand from now on.** Automating a login against Meta is not worth a second block.
+
+Related: `FACEBOOK_APP_SECRET` is no longer present in `.env` (the file was last
+modified 2026-08-26 19:08 by something other than this session). Without it
+`check:tokens` cannot call `debug_token`, so it guesses "EXPIRED" from the error
+code instead of reporting the real reason. Re-add it when the account is
+unblocked.
+
+### This does NOT affect the demo
+
+`src/lib/frozenCorpus.json` still holds all **352 posts including the 160
+Instagram ones**, every one transformer-scored. The corpus is committed, so
+every panel renders exactly as before. What is broken is *new* ingestion from
+those two platforms — nothing the internal round depends on.
+
+### To restore — not before the internal round
+
+1. Sign in to `developers.facebook.com` **manually** and complete Meta's
+   "Confirm Account" flow. This is an identity check on the account owner; it
+   can require ID and can take days. Nobody but the account owner should do it.
+2. Only once the account is unblocked, re-run `npm run get:meta-token`, adding
+   `pages_read_user_content` to the scopes so the Facebook feed works too.
+3. Re-add `FACEBOOK_APP_SECRET` to `.env`.
+
+**Do not attempt any of this before 29/30 Aug.** It cannot change what the
+judges see, and further automated attempts risk hardening the block.
+
+---
+
+## 4c-history. Meta setup — how it was first resolved 2026-08-26
 
 **Instagram is live.** `@bbsrgotlatent`, 160 posts + comments ingested.
 
