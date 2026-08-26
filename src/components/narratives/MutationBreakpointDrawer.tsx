@@ -3,6 +3,7 @@
 import React from 'react';
 import { NarrativeBreakpoint, NarrativeTimelineEntry } from '@/lib/narratives/types';
 import { X, Zap, ArrowRight, ShieldCheck, MessageSquare, User, Calendar, ExternalLink } from 'lucide-react';
+import { getPostUrl, getParentSource } from '@/lib/urls';
 
 interface Props {
   breakpoint: NarrativeBreakpoint | null;
@@ -194,6 +195,45 @@ export function MutationBreakpointDrawer({ breakpoint, timelinePosts = [], onClo
                     <p className="text-nexus-text-secondary leading-relaxed mb-2">
                       &ldquo;{p.contentSnippet}&rdquo;
                     </p>
+
+                    {/* Source post link if comment */}
+                    {(() => {
+                      const directUrl = getPostUrl({ id: p.postId, platform: p.platform, url: p.url, inReplyToPostId: p.inReplyToPostId });
+                      const parentSource = getParentSource({ id: p.postId, platform: p.platform, url: p.url, inReplyToPostId: p.inReplyToPostId });
+
+                      return (
+                        <div className="space-y-1.5 mb-2.5">
+                          {parentSource && parentSource.url && (
+                            <div className="p-1.5 rounded bg-nexus-surface border border-nexus-border/60 flex items-center justify-between text-[10px]">
+                              <span className="text-nexus-muted">
+                                From {parentSource.label}: <strong className="text-nexus-text-secondary font-mono">{parentSource.id}</strong>
+                              </span>
+                              <a
+                                href={parentSource.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-nexus-accent hover:underline flex items-center gap-1 font-medium"
+                              >
+                                <span>Source</span>
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            </div>
+                          )}
+
+                          {directUrl && (
+                            <a
+                              href={directUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] font-semibold text-nexus-accent hover:underline"
+                            >
+                              <span>Open Intercepted Post</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     <div className="flex items-center gap-2 text-[10px]">
                       <span className="px-1.5 py-0.5 rounded bg-nexus-surface text-nexus-muted border border-nexus-border capitalize">

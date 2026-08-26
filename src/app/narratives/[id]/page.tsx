@@ -21,8 +21,11 @@ import {
   MessageSquare,
   User,
   Clock,
+  ExternalLink,
+  Link2,
 } from 'lucide-react';
 import type { Narrative, NarrativeBreakpoint } from '@/lib/narratives/types';
+import { getPostUrl, getParentSource } from '@/lib/urls';
 
 export default function NarrativeDetailPage() {
   const params = useParams();
@@ -329,6 +332,59 @@ export default function NarrativeDetailPage() {
                     <p className="text-nexus-text-secondary leading-relaxed mb-2">
                       &ldquo;{post.contentSnippet}&rdquo;
                     </p>
+
+                    {/* Source post link if comment */}
+                    {(() => {
+                      const directUrl = getPostUrl({
+                        id: post.postId,
+                        platform: post.platform,
+                        url: post.url,
+                        inReplyToPostId: post.inReplyToPostId,
+                      });
+                      const parentSource = getParentSource({
+                        id: post.postId,
+                        platform: post.platform,
+                        url: post.url,
+                        inReplyToPostId: post.inReplyToPostId,
+                      });
+
+                      return (
+                        <div className="space-y-1.5 mb-2.5">
+                          {parentSource && parentSource.url && (
+                            <div className="p-2 rounded-lg bg-nexus-surface border border-nexus-border/60 flex items-center justify-between text-[11px]">
+                              <span className="text-nexus-muted flex items-center gap-1.5">
+                                <Link2 className="w-3 h-3 text-nexus-accent" />
+                                <span>Comment on {parentSource.label}:</span>
+                                <strong className="text-nexus-text-secondary font-mono">
+                                  {parentSource.id}
+                                </strong>
+                              </span>
+                              <a
+                                href={parentSource.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-nexus-accent hover:underline flex items-center gap-1 font-semibold"
+                              >
+                                <span>Source Video/Post</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            </div>
+                          )}
+
+                          {directUrl && (
+                            <a
+                              href={directUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-nexus-accent hover:underline"
+                            >
+                              <span>View Intercepted Post on {post.platform}</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     <div className="flex items-center gap-2 text-[10px]">
                       <span className="px-2 py-0.5 rounded bg-nexus-surface text-nexus-muted border border-nexus-border capitalize">

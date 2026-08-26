@@ -259,6 +259,8 @@ function buildFullNarrative(
     emotion: p.sentiment?.nuancedEmotion || 'neutral',
     contentSnippet: p.content.slice(0, 120),
     isBreakpointTrigger: triggerSet.has(p.id),
+    url: p.url,
+    inReplyToPostId: p.inReplyToPostId,
   }));
 
   // 5. Propagation & Amplifiers

@@ -2,7 +2,17 @@
 
 import React, { useState } from 'react';
 import { SocialPost } from '@/types/intelligence';
-import { Search, Heart, Share2, MessageCircle, User, CheckCircle2, Calendar } from 'lucide-react';
+import {
+  Search,
+  Heart,
+  Share2,
+  MessageCircle,
+  CheckCircle2,
+  Calendar,
+  ExternalLink,
+  Link2,
+} from 'lucide-react';
+import { getPostUrl, getParentSource } from '@/lib/urls';
 
 interface Props {
   posts: SocialPost[];
@@ -34,7 +44,7 @@ export function PlatformFeed({ posts, platformName }: Props) {
             </span>
           </h3>
           <p className="text-[11px] text-nexus-muted mt-0.5">
-            Verified social messages, sentiment scoring, and emotional posture.
+            Verified social messages, sentiment scoring, and original post/video source links.
           </p>
         </div>
 
@@ -57,10 +67,12 @@ export function PlatformFeed({ posts, platformName }: Props) {
             : `No ${platformName} posts match "${search}".`}
         </div>
       ) : (
-        <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+        <div className="space-y-3 max-h-[550px] overflow-y-auto pr-1">
           {filtered.map((post) => {
             const isPositive = post.sentiment.label === 'positive';
             const isNegative = post.sentiment.label === 'negative';
+            const directUrl = getPostUrl(post);
+            const parentSource = getParentSource(post);
 
             return (
               <div
@@ -88,16 +100,54 @@ export function PlatformFeed({ posts, platformName }: Props) {
                     </div>
                   </div>
 
-                  <span className="text-[10px] font-mono text-nexus-muted flex items-center gap-1">
-                    <Calendar className="w-3 h-3" />
-                    {new Date(post.timestamp).toLocaleDateString([], {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-mono text-nexus-muted flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      {new Date(post.timestamp).toLocaleDateString([], {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+
+                    {/* Direct external post link */}
+                    {directUrl && (
+                      <a
+                        href={directUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-nexus-accent hover:underline bg-nexus-accent/10 px-2 py-0.5 rounded border border-nexus-accent/30 transition-all"
+                        title="Open direct post/comment link in new tab"
+                      >
+                        <span>Open Post</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
                 </div>
+
+                {/* Parent Source Link Banner (if this is a comment on a parent video/post) */}
+                {parentSource && parentSource.url && (
+                  <div className="mb-2.5 p-2 rounded-lg bg-nexus-surface border border-nexus-border/80 flex items-center justify-between text-[11px]">
+                    <div className="flex items-center gap-1.5 text-nexus-muted">
+                      <Link2 className="w-3.5 h-3.5 text-nexus-accent" />
+                      <span>
+                        Comment on {parentSource.label}:{' '}
+                        <strong className="text-nexus-text-secondary font-mono">{parentSource.id}</strong>
+                      </span>
+                    </div>
+                    <a
+                      href={parentSource.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-nexus-text-primary hover:text-nexus-accent font-medium transition-colors"
+                    >
+                      <span>View Source {parentSource.label.split(' ')[1] || 'Post'}</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
 
                 {/* Content */}
                 <p className="text-nexus-text-secondary leading-relaxed mb-3">

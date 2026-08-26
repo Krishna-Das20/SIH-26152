@@ -242,6 +242,8 @@ export interface NarrativeTimelineEntry {
   emotion: EmotionType;
   contentSnippet: string;
   isBreakpointTrigger?: boolean;
+  url?: string;
+  inReplyToPostId?: string;
 }
 
 // ── Platform Flow Entry ───────────────────────────────────────────────────
