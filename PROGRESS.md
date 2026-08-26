@@ -7,7 +7,7 @@
 > **Anyone pushing to `main` must update this file in the same push.** A stale
 > status file is worse than none — the next agent will act on it.
 
-**Last updated:** 2026-08-26 · **State as of:** `beta` after PR #2 · **Branches:** `main` (stable) · `beta` (PR target)
+**Last updated:** 2026-08-26 · **State as of:** `main` = `beta` = PR #2 merged · **Branches:** `main` (stable) · `beta` (PR target)
 
 ---
 
@@ -183,6 +183,12 @@ Two deliberate differences from local:
 
 - **No `YOUTUBE_API_KEY`** there, so it reports 1/6 platforms live. Existing
   YouTube data displays fine; new YouTube ingestion is unavailable.
+- **No ML host reachable**, so `/narratives` is EMPTY on Vercel. Sentiment and
+  emotion are unaffected — those are baked into `frozenCorpus.json` — but
+  narrative clustering needs live embeddings from `POST /embeddings`, and there
+  is nowhere to call. The page says so explicitly (it distinguishes "could not
+  embed" from "no clusters found"; do not collapse those two messages). **Demo
+  narratives locally, not from the deployed URL.**
 - **No `PUBLIC_INGEST`**, so `/api/ingest` and `/api/analyze/page` require a
   session. Reads stay open — a judge sees the whole dashboard without an account.
 
@@ -392,6 +398,15 @@ on this corpus.** Demo the feature from `/narratives`, not from the brief. Do
 NOT lower the threshold to make a finding appear — that is the fabrication trap
 this project exists to avoid. The real fix is a corpus with actual discourse in
 it (more YouTube queries on one contested topic).
+
+### Requires the ML service — unlike everything else
+
+This is the first panel that needs `ml/` running at demo time. Sentiment,
+emotion, graph and trends all read pre-scored values out of `frozenCorpus.json`
+and survive with the service stopped; narrative clustering cannot, because
+embeddings are computed live. With the service down the page reports 0 embedded
+of 352 and names the cause. **Check `curl 127.0.0.1:8000/health` before
+demoing this page.**
 
 ---
 

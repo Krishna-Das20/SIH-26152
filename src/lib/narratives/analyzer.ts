@@ -49,8 +49,20 @@ export async function analyzeNarratives(
     ...new Set(posts.map((p) => p.platform)),
   ] as PlatformType[];
 
+  // Sentiment and emotion coverage describe the CORPUS, not the clustering, so
+  // they must be computed before any early return. Reporting them as 0 whenever
+  // no narrative could be built was a real misstatement: on the deployed site,
+  // where no ML host is reachable to embed, every post still carries a real
+  // transformer sentiment from the frozen corpus. The page said 0% anyway.
+  const sentimentCoverage =
+    posts.filter((p) => p.sentiment && p.sentiment.label).length /
+    Math.max(posts.length, 1);
+  const emotionCoverage =
+    posts.filter((p) => p.sentiment && p.sentiment.nuancedEmotion).length /
+    Math.max(posts.length, 1);
+
   if (posts.length < 2) {
-    return emptyResponse(posts.length, availablePlatforms);
+    return emptyResponse(posts.length, availablePlatforms, 0, sentimentCoverage, emotionCoverage);
   }
 
   // 1. Generate embeddings
@@ -71,7 +83,13 @@ export async function analyzeNarratives(
     }));
 
   if (clusterInput.length < 2) {
-    return emptyResponse(posts.length, availablePlatforms, embeddingCoverage);
+    return emptyResponse(
+      posts.length,
+      availablePlatforms,
+      embeddingCoverage,
+      sentimentCoverage,
+      emotionCoverage
+    );
   }
 
   // 3. Cluster into narratives
@@ -104,16 +122,6 @@ export async function analyzeNarratives(
     if (b.mutationScore === null) return -1;
     return b.mutationScore - a.mutationScore;
   });
-
-  // Compute sentiment coverage
-  const sentimentCoverage =
-    posts.filter((p) => p.sentiment && p.sentiment.label).length /
-    Math.max(posts.length, 1);
-
-  // Compute emotion coverage
-  const emotionCoverage =
-    posts.filter((p) => p.sentiment && p.sentiment.nuancedEmotion).length /
-    Math.max(posts.length, 1);
 
   return {
     narratives,
@@ -290,15 +298,17 @@ function buildPlatformFlow(
 function emptyResponse(
   totalPosts: number,
   platforms: PlatformType[],
-  embeddingCoverage: number = 0
+  embeddingCoverage: number = 0,
+  sentimentCoverage: number = 0,
+  emotionCoverage: number = 0
 ): NarrativeAnalysisResponse {
   return {
     narratives: [],
     availablePlatforms: platforms,
     totalPostsAnalyzed: totalPosts,
     coverage: {
-      sentiment: 0,
-      emotion: 0,
+      sentiment: Number(sentimentCoverage.toFixed(2)),
+      emotion: Number(emotionCoverage.toFixed(2)),
       embeddings: embeddingCoverage,
     },
     method: {

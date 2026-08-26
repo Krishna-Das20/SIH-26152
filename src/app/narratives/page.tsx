@@ -307,15 +307,43 @@ export default function NarrativesPage() {
             </div>
 
             {/* No Narratives */}
+            {/*
+              Two very different causes produce an empty list, and telling them
+              apart matters: "the corpus has no clusters" is a finding, while
+              "nothing could be embedded" is an outage. The deployed site has no
+              ML host reachable, so it hits the second case every time — and
+              previously blamed the corpus for it, in front of whoever opened
+              the link. Embedding coverage is the discriminator.
+            */}
             {data.narratives.length === 0 && (
               <div className="intel-card rounded-xl p-8 text-center border border-slate-800">
                 <FileText className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-                <p className="text-slate-400 text-sm mb-1">No narratives detected</p>
-                <p className="text-slate-500 text-xs">
-                  The current corpus does not contain enough semantically similar posts
-                  above the similarity threshold ({data.method.similarityThreshold}).
-                  This is a real result, not an error.
-                </p>
+                {data.coverage.embeddings === 0 ? (
+                  <>
+                    <p className="text-slate-400 text-sm mb-1">
+                      Narrative detection unavailable
+                    </p>
+                    <p className="text-slate-500 text-xs">
+                      Clustering needs sentence embeddings, and the ML service could not
+                      be reached, so 0 of {data.totalPostsAnalyzed} posts were embedded.
+                      Nothing here is degraded or estimated — the analysis simply did not
+                      run. Start the service (<code>uvicorn main:app --port 8000</code> in{' '}
+                      <code>ml/</code>) and reload. Every other panel is unaffected: the
+                      corpus still carries full transformer sentiment (
+                      {Math.round(data.coverage.sentiment * 100)}% coverage).
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-slate-400 text-sm mb-1">No narratives detected</p>
+                    <p className="text-slate-500 text-xs">
+                      All {data.totalPostsAnalyzed} posts were embedded, but none were
+                      similar enough to group above the threshold (
+                      {data.method.similarityThreshold}). This is a real result, not an
+                      error.
+                    </p>
+                  </>
+                )}
               </div>
             )}
 
