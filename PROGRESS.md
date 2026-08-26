@@ -71,7 +71,7 @@ If `ml/.venv` does not exist on your machine, see §7.
 
 | | Component | State | Where |
 | :-- | :-- | :-- | :-- |
-| **A** | Ingestion & timeline | 🟡 2 of 6 platforms live | `src/lib/ingestion/` |
+| **A** | Ingestion & timeline | 🟢 **4 of 6 platforms live** (YT, TG, FB, IG) | `src/lib/ingestion/` |
 | **B** | Sentiment & emotion | 🟢 4 real transformers | `ml/`, `src/lib/ml/client.ts` |
 | **C** | Demographics | 🔴 **regex only, no ML** | `src/lib/nlp/demographicProfiler.ts` |
 | **D** | Trends | 🟢 real z-score · 🟡 no forecast | `src/app/api/analytics/trends/` |
@@ -93,10 +93,10 @@ credentials. Check at runtime: `GET /api/platforms`.
 | :-- | :-- | :-- | :-- |
 | Telegram | Essential | 🟢 **live** | none — public channels need no credentials |
 | YouTube | Appreciable | 🟢 **live** | none — API key configured |
+| Instagram | Desirable | 🟢 **live** | none — configured with `@bbsrgotlatent` |
+| Facebook | Desirable | 🟢 **live** | none — configured with `BBSR Got Laytent` Page |
+| Reddit | Appreciable | 🔴 needs app | free "script" app at reddit.com/prefs/apps (~2 min) |
 | X (Twitter) | Essential | 🔴 needs funding | pay-per-call since Feb 2026, ~$24/mo at demo volume |
-| Instagram | Desirable | 🔴 blocked | Meta Business Verification + App Review, 4–6 wks |
-| Facebook | Desirable | 🔴 blocked | same Meta process, 3–6 wks |
-| Reddit | Appreciable | 🔴 blocked | manual approval queue; commercial use needs an agreement |
 
 Setup for each: [`docs/platform-setup.md`](docs/platform-setup.md).
 Commercial/multi-tenant credentials: [`docs/commercial-setup.md`](docs/commercial-setup.md).
