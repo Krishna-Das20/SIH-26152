@@ -56,7 +56,14 @@ async function checkInstagram() {
   if (!token || !id) return record('Instagram', 'not-configured', 'no credentials set');
 
   const { ok, json } = await meta(`/${id}?fields=username,media_count`, token);
-  if (ok) return record('Instagram', 'working', `@${json.username}, ${json.media_count} media`);
+  if (ok) {
+    const life = await metaExpiry(token);
+    return record(
+      'Instagram',
+      'working',
+      `@${json.username}, ${json.media_count} media${life ? ` — ${life}` : ''}`
+    );
+  }
 
   const e = json.error || {};
   const expired = e.code === 190;
@@ -67,13 +74,50 @@ async function checkInstagram() {
   );
 }
 
+/**
+ * Reports when a Meta token dies. `expires_at: 0` means no scheduled expiry —
+ * which is what a Page token derived from a LONG-LIVED user token gets, and is
+ * the only durable option for a demo weeks away.
+ */
+async function metaExpiry(token) {
+  const appId = env.FACEBOOK_APP_ID || env.INSTAGRAM_APP_ID;
+  const appSecret = env.FACEBOOK_APP_SECRET || env.INSTAGRAM_APP_SECRET;
+  if (!appId || !appSecret) return null; // debug_token needs an app token
+
+  try {
+    const url =
+      `https://graph.facebook.com/v21.0/debug_token?input_token=${encodeURIComponent(token)}` +
+      `&access_token=${encodeURIComponent(`${appId}|${appSecret}`)}`;
+    const res = await fetch(url);
+    const json = await res.json().catch(() => ({}));
+    const d = json?.data;
+    if (!d) return null;
+    if (d.expires_at === 0) return 'PERMANENT (no scheduled expiry)';
+    if (d.expires_at) {
+      const when = new Date(d.expires_at * 1000);
+      const days = Math.round((when - Date.now()) / 86400000);
+      return `expires ${when.toISOString().slice(0, 16)}Z (${days}d)`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function checkFacebook() {
   const token = env.FACEBOOK_PAGE_ACCESS_TOKEN;
   const id = env.FACEBOOK_PAGE_ID;
   if (!token || !id) return record('Facebook', 'not-configured', 'no credentials set');
 
   const { ok, json } = await meta(`/${id}?fields=name,fan_count`, token);
-  if (ok) return record('Facebook', 'working', `${json.name}, ${json.fan_count ?? '?'} followers`);
+  if (ok) {
+    const life = await metaExpiry(token);
+    return record(
+      'Facebook',
+      'working',
+      `${json.name}, ${json.fan_count ?? '?'} followers${life ? ` — ${life}` : ''}`
+    );
+  }
 
   const e = json.error || {};
   record('Facebook', e.code === 190 ? 'EXPIRED' : 'broken', `${e.message || 'unknown'}`.slice(0, 120));
