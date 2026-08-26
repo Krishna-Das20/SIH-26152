@@ -71,7 +71,7 @@ If `ml/.venv` does not exist on your machine, see §7.
 
 | | Component | State | Where |
 | :-- | :-- | :-- | :-- |
-| **A** | Ingestion & timeline | 🟢 **4 of 6 platforms live** (YT, TG, FB, IG) | `src/lib/ingestion/` |
+| **A** | Ingestion & timeline | 🟡 **2 of 6 actually working** (YT, TG) | `src/lib/ingestion/` |
 | **B** | Sentiment & emotion | 🟢 4 real transformers | `ml/`, `src/lib/ml/client.ts` |
 | **C** | Demographics | 🔴 **regex only, no ML** | `src/lib/nlp/demographicProfiler.ts` |
 | **D** | Trends | 🟢 real z-score · 🟡 no forecast | `src/app/api/analytics/trends/` |
@@ -93,8 +93,8 @@ credentials. Check at runtime: `GET /api/platforms`.
 | :-- | :-- | :-- | :-- |
 | Telegram | Essential | 🟢 **live** | none — public channels need no credentials |
 | YouTube | Appreciable | 🟢 **live** | none — API key configured |
-| Instagram | Desirable | 🟢 **live** | none — configured with `@bbsrgotlatent` |
-| Facebook | Desirable | 🟢 **live** | none — configured with `BBSR Got Laytent` Page |
+| Instagram | Desirable | 🟠 **credentials EXPIRED** | token set but dead — see §4c |
+| Facebook | Desirable | 🟠 **credentials EXPIRED** | token set but dead — see §4c |
 | Reddit | Appreciable | 🔴 blocked on review | Gated by Responsible Builder Policy; Devvit RFC in `docs/devvit-integration.md` |
 | X (Twitter) | Essential | 🔴 needs funding | pay-per-call since Feb 2026, ~$24/mo at demo volume |
 
@@ -112,6 +112,45 @@ re-testing these:
 - Instagram `?__a=1` → no JSON; `web_profile_info` → 429; Basic Display API retired Dec 2024
 - Facebook Graph anonymous → `(#200) Provide valid app ID`
 - YouTube Data API → 403 without a key
+
+### Run this before trusting any of the above
+
+```bash
+npm run check:tokens
+```
+
+`/api/platforms` reports whether an env var is **present**. It cannot tell you
+whether the credential still **works** — that would cost an API call on every
+request. `check:tokens` makes one real call per platform and exits non-zero if
+anything configured is dead. Run it before every rehearsal.
+
+---
+
+## 4c. Instagram / Facebook — tokens expired (2026-08-26)
+
+`INSTAGRAM_ACCESS_TOKEN` and `FACEBOOK_PAGE_ACCESS_TOKEN` are set in `.env` but
+**both are expired**. Verified: `OAuthException code 190, subcode 463 — "Session
+has expired on Wednesday, 26-Aug-26 05:00:00 PDT."`
+
+**Cause:** the tokens were taken straight from the Graph API Explorer, which
+issues **short-lived (~1–2 hour)** tokens. The long-lived exchange step was
+never run, so they died within hours of being pasted in.
+
+**No secret was leaked.** `.env` stayed gitignored and a full history scan found
+zero token strings in any commit.
+
+**To fix**, generate a fresh Explorer token, then exchange it *before* using it:
+
+```bash
+curl "https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=APP_ID&client_secret=APP_SECRET&fb_exchange_token=SHORT_LIVED_TOKEN"
+```
+
+Then take the Page token from `/me/accounts` (Pages carry their own tokens — a
+user token will not read Page content), and confirm with `npm run check:tokens`.
+
+Note that Meta uses **dynamic expiry** since 2026: even a long-lived token can
+die early if it sees an unusual location or a request spike. Expect to
+regenerate before the demo.
 
 ---
 
