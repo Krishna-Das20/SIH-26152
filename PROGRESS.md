@@ -71,7 +71,7 @@ If `ml/.venv` does not exist on your machine, see §7.
 
 | | Component | State | Where |
 | :-- | :-- | :-- | :-- |
-| **A** | Ingestion & timeline | 🟡 **2 of 6 actually working** (YT, TG) | `src/lib/ingestion/` |
+| **A** | Ingestion & timeline | 🟢 **4 of 6 working** (YT, TG, IG, FB*) | `src/lib/ingestion/` |
 | **B** | Sentiment & emotion | 🟢 4 real transformers | `ml/`, `src/lib/ml/client.ts` |
 | **C** | Demographics | 🔴 **regex only, no ML** | `src/lib/nlp/demographicProfiler.ts` |
 | **D** | Trends | 🟢 real z-score · 🟡 no forecast | `src/app/api/analytics/trends/` |
@@ -93,8 +93,8 @@ credentials. Check at runtime: `GET /api/platforms`.
 | :-- | :-- | :-- | :-- |
 | Telegram | Essential | 🟢 **live** | none — public channels need no credentials |
 | YouTube | Appreciable | 🟢 **live** | none — API key configured |
-| Instagram | Desirable | 🟠 **credentials EXPIRED** | token set but dead — see §4c |
-| Facebook | Desirable | 🟠 **credentials EXPIRED** | token set but dead — see §4c |
+| Instagram | Desirable | 🟢 **live** | permanent Page token · @bbsrgotlatent, 160 posts ingested |
+| Facebook | Desirable | 🟡 **token valid, feed blocked** | needs `pages_read_user_content` — see §4c |
 | Reddit | Appreciable | 🔴 blocked on review | Gated by Responsible Builder Policy; Devvit RFC in `docs/devvit-integration.md` |
 | X (Twitter) | Essential | 🔴 needs funding | pay-per-call since Feb 2026, ~$24/mo at demo volume |
 
@@ -126,42 +126,50 @@ anything configured is dead. Run it before every rehearsal.
 
 ---
 
-## 4c. Instagram / Facebook — tokens expired (2026-08-26)
+## 4c. Meta setup — resolved 2026-08-26
 
-`INSTAGRAM_ACCESS_TOKEN` and `FACEBOOK_PAGE_ACCESS_TOKEN` are set in `.env` but
-**both are expired**. Verified: `OAuthException code 190, subcode 463 — "Session
-has expired on Wednesday, 26-Aug-26 05:00:00 PDT."`
+**Instagram is live.** `@bbsrgotlatent`, 160 posts + comments ingested.
 
-**Cause:** the tokens were taken straight from the Graph API Explorer, which
-issues **short-lived (~1–2 hour)** tokens. The long-lived exchange step was
-never run, so they died within hours of being pasted in.
+The token in `.env` is a **permanent Page access token** (`type: PAGE`,
+`expires_at: 0`, verified via `debug_token`). The same token serves both
+platforms, because Instagram Graph reads the linked Business account through
+the Page.
 
-**No secret was leaked.** `.env` stayed gitignored and a full history scan found
-zero token strings in any commit.
+| | |
+| :-- | :-- |
+| App | SIH — `2451159215406440` |
+| Page | BBSR Got Laytent — `1378817178638963` |
+| Instagram | `17841415627266694` |
 
-**To fix — the automated way (preferred):**
+### Why the earlier tokens died
 
-```bash
-npm run get:meta-token
-```
+A Page token **inherits the lifetime of the user token it was derived from**.
+The first attempt derived it from a raw Graph API Explorer token (1–2 hours),
+so it expired the same day. The fix is to exchange for a long-lived user token
+*first*, then call `/me/accounts`. `npm run get:meta-token` does this in the
+correct order and verifies `expires_at: 0` before printing.
 
-Add `FACEBOOK_APP_ID` and `FACEBOOK_APP_SECRET` to `.env` first, register the
-redirect URI it prints, then click Approve once. It performs the exchange in
-the correct order, verifies `expires_at: 0` before printing, and resolves the
-Instagram Business ID. The manual route below is only for reference.
+**This token has no timer but is not immortal** — it dies if the Facebook
+password changes, the role on the Page is removed, or access is revoked. Do not
+change that password before December. Verify with `npm run check:tokens`.
 
-**Manually:** generate a fresh Explorer token, then exchange it *before* using it:
+### Facebook feed is still blocked
 
-```bash
-curl "https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=APP_ID&client_secret=APP_SECRET&fb_exchange_token=SHORT_LIVED_TOKEN"
-```
+The token is valid and reads Page metadata, but `/{page}/posts` returns:
 
-Then take the Page token from `/me/accounts` (Pages carry their own tokens — a
-user token will not read Page content), and confirm with `npm run check:tokens`.
+> `(#10) This endpoint requires the 'pages_read_user_content' permission`
 
-Note that Meta uses **dynamic expiry** since 2026: even a long-lived token can
-die early if it sees an unusual location or a request spike. Expect to
-regenerate before the demo.
+That scope was not granted. To fix, re-run the Explorer flow adding
+`pages_read_user_content`, then repeat the long-lived exchange. Low priority —
+the Page has 1 post, while Instagram already supplies 160.
+
+### Instagram commenters are anonymous by design
+
+The API returns only `[id, text, timestamp, like_count]` for comments — **no
+username**. Each anonymous commenter is given an id derived from the comment
+id, so distinct-author counts are an UPPER bound (two comments by the same
+person cannot be merged). The reply edge to the media owner is real. A shared
+placeholder was previously collapsing all 160 commenters into ONE node.
 
 ---
 
@@ -188,14 +196,14 @@ ML service on `127.0.0.1`, so new ingestion there falls back to the lexicon.
 
 ## 5. Demo corpus
 
-`src/lib/frozenCorpus.json` — **201 real posts** (161 YouTube + 40 Telegram),
+`src/lib/frozenCorpus.json` — **352 real posts** (152 YouTube + 160 Instagram + 40 Telegram),
 all transformer-scored at capture, committed to the repo.
 
 This is a **real captured snapshot, not synthetic data**. It exists so the demo
 never depends on venue wi-fi, a live API, or YouTube's 10,000 units/day quota
 (`search.list` costs 100 units — a morning of rehearsals could exhaust it).
 
-Graph it produces: **158 accounts, 67 edges, 7 communities, modularity Q = 0.83**
+Graph it produces: **301 accounts, 188 edges, 5 communities, modularity Q = 0.37**
 (>0.3 indicates real community structure).
 
 To refresh it after ingesting more data:

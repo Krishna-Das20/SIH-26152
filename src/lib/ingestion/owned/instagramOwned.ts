@@ -81,7 +81,9 @@ export async function instagramOwnMedia(token: string, limit: number): Promise<S
       if (!text) continue;
 
       const demo = inferDemographics('', text);
-      const commenter = c.username || 'instagram_user';
+      // See instagram.ts: the API withholds commenter usernames, so a shared
+      // placeholder would merge every commenter into one graph node.
+      const commenter = c.username || `ig_anon_${c.id.slice(-8)}`;
 
       posts.push({
         id: `ig_c_${c.id}`,

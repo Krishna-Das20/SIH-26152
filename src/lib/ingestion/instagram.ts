@@ -115,7 +115,20 @@ function commentToPost(c: IgComment, media: IgMedia, ownerHandle: string): Socia
 
   const sentiment = analyzeSentimentAndEmotion(text);
   const demo = inferDemographics('', text);
-  const username = c.username || 'instagram_user';
+
+  // Instagram does NOT return `username` on comments without additional
+  // permissions -- verified 2026-08-26, the API returns only
+  // [id, text, timestamp, like_count]. Falling back to one shared placeholder
+  // collapsed every commenter into a SINGLE graph node, which silently
+  // understated the audience as one person.
+  //
+  // Each anonymous commenter therefore gets an id derived from the comment id.
+  // That cannot merge two comments by the same person -- so distinct-author
+  // counts are an UPPER bound -- but it preserves the genuine reply edge to the
+  // media owner, which is real interaction data. Overstating distinctness is
+  // the safer error here than fabricating a single shared identity.
+  const anonymous = !c.username;
+  const username = c.username || `ig_anon_${c.id.slice(-8)}`;
 
   return {
     id: `ig_c_${c.id}`,
@@ -123,7 +136,7 @@ function commentToPost(c: IgComment, media: IgMedia, ownerHandle: string): Socia
     author: {
       id: `usr_ig_${username}`,
       username,
-      displayName: username,
+      displayName: anonymous ? 'Instagram commenter (identity withheld)' : username,
       platform: 'instagram',
       // A commenter's follower count is not returned by the API.
       followerCount: null,

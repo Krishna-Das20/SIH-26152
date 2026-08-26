@@ -153,23 +153,34 @@ export async function getAllPosts(): Promise<SocialPost[]> {
 }
 
 export async function addPosts(newPosts: SocialPost[]): Promise<void> {
+  if (newPosts.length === 0) return;
+
+  // Deduplicate ONLY for the in-memory cache. Persistence below always
+  // upserts.
+  //
+  // These must stay separate: reads come from MongoDB when it is available,
+  // but the cache is seeded from the frozen corpus. After a reset the two
+  // diverge, and filtering the database write by what the CACHE already holds
+  // silently dropped posts that were genuinely missing from the database —
+  // Telegram ingests reported "20 ingested" while the store stayed at zero,
+  // because those ids existed in the frozen baseline but never in MongoDB.
   const existing = cache();
   const existingIds = new Set(existing.map((p) => p.id));
-  const uniqueNew = newPosts.filter((p) => !existingIds.has(p.id));
+  const newToCache = newPosts.filter((p) => !existingIds.has(p.id));
 
-  if (uniqueNew.length > 0) {
-    global._postsCache = normalise([...existing, ...uniqueNew]);
+  if (newToCache.length > 0) {
+    global._postsCache = normalise([...existing, ...newToCache]);
   }
 
   const db = await getDatabase();
-  if (db && uniqueNew.length > 0) {
+  if (db) {
     try {
       await ensureIndexes(db);
-      // Upsert rather than insertMany: re-ingesting a channel re-sees the same
-      // message ids, and a plain insert throws a duplicate-key error that
-      // aborts the whole batch.
+      // Upsert the FULL batch, not just what was new to the cache. Upsert is
+      // idempotent, so re-seeing a message id is harmless — whereas skipping
+      // it can leave the database permanently short of a post.
       await db.collection('posts').bulkWrite(
-        uniqueNew.map((post) => ({
+        newPosts.map((post) => ({
           updateOne: {
             filter: { id: post.id },
             update: { $set: post },
