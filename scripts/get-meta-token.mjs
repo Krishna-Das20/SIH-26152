@@ -34,17 +34,34 @@ const PORT = 5599;
 const REDIRECT_URI = `http://localhost:${PORT}/callback`;
 const GRAPH = 'https://graph.facebook.com/v21.0';
 
-const SCOPES = [
-  'pages_show_list',
-  'pages_read_engagement',
-  // Without this the Page token reads metadata but /{page}/posts returns
-  // "(#10) requires the 'pages_read_user_content' permission" -- which is the
-  // state the previous token was left in. Granting it here means one mint
-  // fixes both platforms instead of needing a second pass for Facebook.
-  'pages_read_user_content',
-  'instagram_basic',
-  'instagram_manage_insights',
-].join(',');
+/**
+ * Scopes the app can actually request.
+ *
+ * A scope the app's use-case configuration has not enabled is not merely
+ * ignored -- Facebook refuses the WHOLE dialog with "Invalid Scopes: ..." and
+ * no code is ever issued. Verified 2026-08-27 against app 2451159215406440:
+ * `pages_read_user_content` and `instagram_manage_insights` were both rejected,
+ * because the app's Instagram use case is configured for "API setup with
+ * Instagram login" rather than "with Facebook login".
+ *
+ * So this list is deliberately the MINIMUM that mints a working Page token.
+ * Anything aspirational belongs in OPTIONAL_SCOPES below, not here -- a broken
+ * dialog gets you nothing at all, while a narrow token gets you Instagram.
+ */
+const SCOPES = ['pages_show_list', 'pages_read_engagement', 'instagram_basic'].join(',');
+
+/**
+ * Add these to SCOPES only AFTER enabling them on the app:
+ * Meta dashboard -> Use cases -> Customize -> Permissions and features, and
+ * for the Instagram ones switch the use case to "API setup with Facebook
+ * login". Until then they make the OAuth dialog fail outright.
+ *
+ *   pages_read_user_content    -> unblocks GET /{page}/posts (Facebook feed)
+ *   instagram_manage_insights  -> unblocks Instagram insights + hashtag search
+ *
+ * Override without editing this file:  META_SCOPES=a,b,c npm run get:meta-token
+ */
+const EFFECTIVE_SCOPES = process.env.META_SCOPES || SCOPES;
 
 // ── env ───────────────────────────────────────────────────────────────────
 const ENV_PATH = path.join(process.cwd(), '.env');
@@ -203,7 +220,7 @@ const state = crypto.randomBytes(16).toString('hex');
 const authUrl =
   `https://www.facebook.com/v21.0/dialog/oauth?client_id=${APP_ID}` +
   `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
-  `&scope=${encodeURIComponent(SCOPES)}&response_type=code&state=${state}`;
+  `&scope=${encodeURIComponent(EFFECTIVE_SCOPES)}&response_type=code&state=${state}`;
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
