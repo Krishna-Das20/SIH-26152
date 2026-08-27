@@ -227,7 +227,7 @@ export function MutationBreakpointDrawer({ breakpoint, timelinePosts = [], onClo
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 text-[10px] font-semibold text-skynet-accent hover:underline"
                             >
-                              <span>Open Intercepted Post</span>
+                              <span>Open Original Post</span>
                               <ExternalLink className="w-2.5 h-2.5" />
                             </a>
                           )}

@@ -541,12 +541,23 @@ original four were given in PR #2:
 Still 2 of 25 narratives carry a composite score, because the PR #2 gate on the
 four core dimensions is intact. That remains correct for this corpus.
 
-### Known cosmetic issue
+### UI wording — "intercepted" removed 2026-08-27
 
-The UI copy leans on "intercepted" / "INTERCEPT" for what is public data pulled
-from public APIs. Against an NTRO audience that word is legally loaded and
-overclaims what the system does. Worth softening to "collected" before the
-final round.
+The PR's copy described public API reads as "intercepted" / "LIVE INTERCEPT".
+Against an NTRO audience that word is legally loaded and overclaims what the
+system does — it reads as signals interception rather than a documented GET
+against a public endpoint. All 8 UI strings now say "collected" / "original".
+
+One occurrence was deliberately KEPT: `src/app/api/connect/[provider]/route.ts`
+says an "intercepted authorization code cannot be redeemed without it", which is
+correct security terminology for what PKCE defends against, not a claim about
+collection.
+
+**Still open:** `/api/analytics/overview` emits `threatLevel`
+(LOW/ELEVATED/HIGH/CRITICAL) derived purely from the share of negative
+sentiment. Its own comment calls it "Threat / Volatility Level Assessment" —
+volatility is what it measures. Renaming it is an API-contract change touching
+several consumers, so it was left alone; consider it before the final round.
 
 ---
 

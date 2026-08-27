@@ -44,7 +44,7 @@ const PLATFORMS: Record<PlatformTab, PlatformMeta> = {
     name: 'All Platforms',
     shortName: 'Unified Fusion',
     tagline: 'Cross-Vector Intelligence Command',
-    description: 'Aggregated cross-platform intelligence across all intercepted social feeds and communities.',
+    description: 'Aggregated cross-platform intelligence across all collected social feeds and communities.',
     icon: '🌐',
     color: 'text-skynet-accent',
     borderColor: 'border-skynet-accent/50',
@@ -262,7 +262,7 @@ export default function OverviewPage() {
               <span>Select Platform Command Screen</span>
             </span>
             <span className="text-[11px] text-skynet-muted">
-              {metrics.totalPosts} total intercepted posts in active scope
+              {metrics.totalPosts} total collected posts in active scope
             </span>
           </div>
 
@@ -384,7 +384,7 @@ export default function OverviewPage() {
           <div className="flex items-center justify-between mb-2.5">
             <span className="text-[11px] font-mono uppercase text-skynet-accent flex items-center gap-1.5 font-bold">
               <Zap className="w-3.5 h-3.5" />
-              <span>Live Intercept & Ingestion Console</span>
+              <span>Live Collection & Ingestion Console</span>
             </span>
             <span className="text-[10px] text-skynet-muted font-mono">
               Direct Reel, Video, or Channel Targeting
@@ -418,7 +418,7 @@ export default function OverviewPage() {
               {ingesting ? (
                 <>
                   <Activity className="w-3.5 h-3.5 animate-spin" />
-                  <span>Intercepting & Scoring…</span>
+                  <span>Collecting & Scoring…</span>
                 </>
               ) : (
                 <>
@@ -665,7 +665,7 @@ export default function OverviewPage() {
               </div>
             </div>
 
-            {/* Intercepted Posts Stream for this Screen */}
+            {/* Collected Posts Stream for this Screen */}
             <div className="mb-8">
               <PlatformFeed posts={posts} platformName={currentPlatform.name} />
             </div>

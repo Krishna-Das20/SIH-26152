@@ -38,7 +38,7 @@ export function PlatformFeed({ posts, platformName }: Props) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-skynet-border">
         <div>
           <h3 className="text-sm font-bold text-skynet-text-primary flex items-center gap-2">
-            <span>Intercepted {platformName} Stream</span>
+            <span>Collected {platformName} Stream</span>
             <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-skynet-surface-secondary text-skynet-text-secondary border border-skynet-border">
               {filtered.length} posts
             </span>

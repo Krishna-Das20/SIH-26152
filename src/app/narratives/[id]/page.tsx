@@ -378,7 +378,7 @@ export default function NarrativeDetailPage() {
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 text-[11px] font-semibold text-skynet-accent hover:underline"
                             >
-                              <span>View Intercepted Post on {post.platform}</span>
+                              <span>View Original Post on {post.platform}</span>
                               <ExternalLink className="w-3 h-3" />
                             </a>
                           )}
