@@ -5,6 +5,7 @@ import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Shield, Lock, Mail, User, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
+import { SkynetLogo } from '@/components/SkynetLogo';
 
 export default function SignInPage() {
   const router = useRouter();
@@ -63,36 +64,35 @@ export default function SignInPage() {
         router.refresh();
       }
     } catch (err: any) {
-      setError(err.message || 'Authentication failed.');
+      setError(err.message || 'Authentication failed. Please verify credentials.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleGoogleSignIn = () => {
-    setLoading(true);
     signIn('google', { callbackUrl: '/' });
   };
 
   return (
-    <div className="min-h-screen bg-[#07090e] flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-black flex items-center justify-center p-4 relative overflow-hidden">
       
       {/* Background Radial Glow */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-1/4 left-1/3 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="max-w-md w-full intel-card rounded-2xl p-8 border border-intel-border shadow-2xl relative z-10">
+      <div className="max-w-md w-full intel-card rounded-2xl p-8 border border-white/10 shadow-2xl relative z-10">
         
         {/* Brand Header */}
         <div className="text-center mb-6">
-          <div className="inline-flex p-3 rounded-xl bg-cyan-500/10 border border-intel-cyan/40 text-intel-cyan mb-3">
-            <Shield className="w-8 h-8 animate-pulse" />
+          <div className="flex justify-center mb-3">
+            <SkynetLogo size={48} />
           </div>
           <div className="text-xs font-mono uppercase tracking-wider text-cyan-400 font-bold mb-1">
-            SIH26-26152 • NTRO Intel Portal
+            SKYNET DEFENSE • NTRO SECURE PORTAL
           </div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">
-            {isSignUp ? 'Create Analyst Account' : 'Analyst Authentication'}
+          <h2 className="text-2xl font-bold text-white tracking-tight font-display">
+            {isSignUp ? 'Create Analyst Account' : 'SKYNET Authentication'}
           </h2>
           <p className="text-xs text-slate-400 mt-1">
             {isSignUp

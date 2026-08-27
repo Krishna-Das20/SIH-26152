@@ -12,11 +12,11 @@ export function SectionHeader({ title, subtitle, action }: SectionHeaderProps) {
   return (
     <div className="flex items-end justify-between mb-4">
       <div>
-        <h2 className="text-[15px] font-semibold text-nexus-text-primary tracking-tight">
+        <h2 className="text-lg font-extrabold text-white tracking-tight font-display">
           {title}
         </h2>
         {subtitle && (
-          <p className="text-[12px] text-nexus-text-secondary mt-0.5">
+          <p className="text-xs text-neutral-400 mt-0.5 font-medium">
             {subtitle}
           </p>
         )}

@@ -3,8 +3,8 @@ import "./globals.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "NEXUS • Social Intelligence Platform",
-  description: "AI-Driven Social Media Analytics — Narrative Mutation, Sentiment, Trends, Network Topology",
+  title: "SKYNET • Social Intelligence Platform",
+  description: "SKYNET Autonomous Social Media Intelligence & Narrative Tracking Platform — SIH-26152",
 };
 
 export default function RootLayout({
