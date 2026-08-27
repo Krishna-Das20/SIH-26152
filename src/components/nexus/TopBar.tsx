@@ -99,7 +99,7 @@ export function TopBar({ title, subtitle, onRefresh, refreshing, children }: Top
       {/* Interactive Analyst Clearance Modal */}
       {showAnalystModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-          <div className="relative w-full max-w-md liquid-glass-dock p-6 border border-white/20 shadow-2xl text-left">
+          <div className="relative w-full max-w-md liquid-glass-dock p-6 border border-white/20 shadow-2xl text-left smooth-enter">
             {/* Header */}
             <div className="flex items-center justify-between mb-5 pb-4 border-b border-white/10">
               <div className="flex items-center gap-3">

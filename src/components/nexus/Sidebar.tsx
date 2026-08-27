@@ -73,16 +73,19 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 ${
+              className={`group relative flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 active:scale-[0.98] ${
                 isActive
-                  ? 'bg-gradient-to-r from-white/15 to-white/5 text-white border border-white/20 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.2)]'
-                  : 'text-neutral-400 hover:text-white hover:bg-white/[0.05] border border-transparent'
+                  ? 'liquid-glass-active text-white'
+                  : 'text-neutral-400 hover:text-white hover:bg-white/[0.06] hover:translate-x-1 border border-transparent'
               }`}
             >
               <div className="flex items-center gap-3">
+                {isActive && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#00F0FF] animate-pulse" />
+                )}
                 <Icon
                   className={`w-4 h-4 transition-colors ${
-                    isActive ? 'text-white' : 'text-neutral-500'
+                    isActive ? 'text-cyan-400' : 'text-neutral-500 group-hover:text-white'
                   }`}
                   strokeWidth={isActive ? 2.2 : 1.7}
                 />
