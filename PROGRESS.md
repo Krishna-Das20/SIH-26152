@@ -495,6 +495,35 @@ demoing this page.**
 
 ---
 
+## 15. Platform ribbon counts must stay constant
+
+The dashboard's platform ribbon is NAVIGATION — each card states how much data
+sits behind that tab. Those numbers previously came from the same filtered
+`/api/analytics/overview` response as the panels, so selecting YouTube made
+Telegram and Instagram read **0**: the ribbon claimed the data had vanished when
+it had only been filtered out of the current view.
+
+`/api/analytics/overview` now returns two views of the same tenant's data:
+
+| Field | Scope | Use for |
+| :-- | :-- | :-- |
+| `platformBreakdown`, `totalPosts` | filtered by `?platform=` | the panels — the active tab's view |
+| `corpusBreakdown`, `corpusTotal` | **never** filtered | the ribbon, and anything navigational |
+
+Verified: ribbon reads `yt=152 tg=46 ig=160 total=358` on every tab, while the
+scoped count moves 358 → 152 → 46 → 160 → 0. Do not point navigation at
+`platformBreakdown`.
+
+### If every `/api/analytics/*` route 404s in dev
+
+`.next` is in a mixed dev/production state — usually because `npm run build` ran
+while `npm run dev` was live. Static routes (`/`, `/api/platforms`) keep working
+while every dynamic route 404s, which makes it look like a code fault. It is
+not. Stop the dev server, `rm -rf .next`, start it again. **Never run
+`npm run build` while the dev server is up.**
+
+---
+
 ## 14. Security review — 2026-08-27
 
 Two HIGH findings in the PR #3 web-preview path, both fixed. Regression tests

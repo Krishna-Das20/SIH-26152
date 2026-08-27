@@ -136,6 +136,8 @@ export default function OverviewPage() {
     supportivePercentage: 0,
     opposingPercentage: 0,
     platformBreakdown: {} as Record<string, number>,
+    corpusBreakdown: {} as Record<string, number>,
+    corpusTotal: 0,
   });
   const [sentimentData, setSentimentData] = useState({
     emotionRadar: [] as { emotion: string; value: number; rawCount: number }[],
@@ -233,7 +235,10 @@ export default function OverviewPage() {
   }, [activeTab, fetchPlatformData]);
 
   const currentPlatform = PLATFORMS[activeTab];
-  const platformCounts = metrics.platformBreakdown || {};
+  // Navigation counts come from the CORPUS view, so they stay put when a tab
+  // is selected. `platformBreakdown` is scoped to the active tab and would
+  // zero out every card except the selected one.
+  const platformCounts = metrics.corpusBreakdown || {};
 
   const topEmotions = sentimentData.emotionRadar
     .filter((e) => e.rawCount > 0)
@@ -270,7 +275,7 @@ export default function OverviewPage() {
             {(Object.keys(PLATFORMS) as PlatformTab[]).map((pKey) => {
               const p = PLATFORMS[pKey];
               const isSelected = activeTab === pKey;
-              const count = pKey === 'all' ? metrics.totalPosts : platformCounts[pKey] || 0;
+              const count = pKey === 'all' ? metrics.corpusTotal : platformCounts[pKey] || 0;
 
               return (
                 <button
