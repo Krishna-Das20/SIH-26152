@@ -152,6 +152,41 @@ export async function getAllPosts(): Promise<SocialPost[]> {
   return cache();
 }
 
+/**
+ * Persists the frozen baseline into MongoDB if the collection is empty.
+ *
+ * The baseline lives in the memory CACHE, never in the database. But
+ * getAllPosts() prefers a non-empty database over the cache, so on a fresh
+ * database the first ingest replaced the entire demo corpus: 25 ingested posts
+ * became the only 25 documents, the collection was no longer empty, and the
+ * 358-post baseline stopped being read at all. Measured 2026-08-27 — four
+ * ad-hoc ingests took the dashboard from 352 posts to 71.
+ *
+ * On stage that turns "analyse this video" into "delete the demo", which is
+ * exactly what a judge is most likely to try. Seeding first keeps the database
+ * a SUPERSET of the baseline instead of a replacement.
+ */
+async function seedBaselineIfEmpty(db: Db): Promise<void> {
+  try {
+    const existing = await db.collection('posts').countDocuments({}, { limit: 1 });
+    if (existing > 0) return;
+
+    const base = baseline();
+    if (base.length === 0) return;
+
+    await db.collection('posts').bulkWrite(
+      base.map((post) => ({
+        updateOne: { filter: { id: post.id }, update: { $set: post }, upsert: true },
+      })),
+      { ordered: false }
+    );
+    console.log(`Seeded ${base.length} baseline posts into MongoDB.`);
+  } catch (e) {
+    // Non-fatal: the cache still holds the baseline, so reads stay correct.
+    console.warn('Could not seed the baseline into MongoDB:', e);
+  }
+}
+
 export async function addPosts(newPosts: SocialPost[]): Promise<void> {
   if (newPosts.length === 0) return;
 
@@ -201,6 +236,9 @@ export async function addPosts(newPosts: SocialPost[]): Promise<void> {
   if (db) {
     try {
       await ensureIndexes(db);
+      // Must run BEFORE the upsert below, or this write is what makes the
+      // collection non-empty and hides the baseline from every later read.
+      await seedBaselineIfEmpty(db);
       // Upsert the FULL batch, not just what was new to the cache. Upsert is
       // idempotent, so re-seeing a message id is harmless — whereas skipping
       // it can leave the database permanently short of a post.

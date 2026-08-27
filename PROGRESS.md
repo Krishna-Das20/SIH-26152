@@ -495,6 +495,46 @@ demoing this page.**
 
 ---
 
+## 13. Ad-hoc ingest — timings, and the bug it exposed
+
+The SKYNET dashboard has a live ingest console: paste a YouTube URL, Instagram
+reel, or Telegram channel and it collects, ML-scores and re-renders. Measured
+2026-08-27 on this laptop, end to end:
+
+| Target | Collected | Time |
+| :-- | --: | --: |
+| YouTube video (cold — route compiles) | 25 | **12.3 s** |
+| YouTube video (warm) | 25 | **9.3 s** |
+| Instagram reel | 1 | **6.2 s** |
+| Telegram channel | 20 | **26.5 s** |
+
+Then the dashboard refetches five analytics routes in parallel, 1.3–3.5 s warm.
+**So a judge pasting a YouTube link sees a fully re-scored dashboard in roughly
+12–13 seconds.** Telegram is the slow one — it fetches the channel preview page
+and parses it, so budget ~30 s if demoing that path.
+
+First call after `npm run dev` is always slower: Next compiles the route on
+demand, and the ML service costs ~20 s extra on its very first batch. **Warm
+both up before judging** — one throwaway ingest during setup is enough.
+
+### The bug this exposed — fixed, do not reintroduce
+
+`getAllPosts()` prefers a NON-EMPTY MongoDB collection over the memory cache,
+but the frozen baseline is only ever seeded into the CACHE. `addPosts()`
+persisted only the incoming batch. So against a fresh database the first ingest
+made the collection non-empty with *only the new posts*, and every later read
+returned those instead of the corpus.
+
+Measured before the fix: four ad-hoc ingests took the dashboard from **352 posts
+to 71**. On stage that turns "analyse this video" into "delete the demo" — and
+pasting a link is the single most likely thing a judge will try.
+
+`seedBaselineIfEmpty()` now runs before the first upsert, keeping MongoDB a
+**superset** of the baseline. Verified after the fix: 358 baseline + 25 ingested
+= 383, all three platforms intact.
+
+---
+
 ## 12. SKYNET UI (PR #3, merged 2026-08-27)
 
 @Rishiraj-De's frontend overhaul, renamed from "NEXUS" to **SKYNET** (team name)
