@@ -12,7 +12,7 @@
 > **Anyone pushing to `main` must update this file in the same push.** A stale
 > status file is worse than none — the next agent will act on it.
 
-**Last updated:** 2026-08-27 · **State as of:** `main` = `beta` = PR #2 merged · **Branches:** `main` (stable) · `beta` (PR target)
+**Last updated:** 2026-08-27 (PR #3 merged) · **State as of:** `main` = `beta` = PR #2 merged · **Branches:** `main` (stable) · `beta` (PR target)
 
 ---
 
@@ -45,7 +45,7 @@ demo — that is the whole reason this branch exists.
 | **Next deadline** | **Internal hackathon — 29/30 Aug 2026** |
 | **After that** | Idea submission 20 Sept · Grand Finale Dec 2026 (36h) |
 | **Demo state** | ✅ Runnable, network-independent, no login required |
-| **Build** | ✅ `npm run build` clean, 20 routes |
+| **Build** | ✅ `npm run build` clean, 29 routes |
 | **Tests** | ✅ `npm run verify` — 3 suites, all passing |
 
 ### Right now the demo works like this
@@ -82,7 +82,8 @@ If `ml/.venv` does not exist on your machine, see §7.
 | **D** | Trends | 🟢 real z-score · 🟡 no forecast | `src/app/api/analytics/trends/` |
 | **E** | Link analysis | 🟢 real Louvain + Brandes | `src/lib/graph/` |
 | **+** | **Cross-vector brief** | 🟢 **the differentiator** | `src/app/api/analytics/brief/` |
-| **+** | **Narrative mutation** | 🟢 merged from PR #2 · see §11 | `src/lib/narratives/` |
+| **+** | **Narrative mutation** | 🟢 8 dimensions · see §11 | `src/lib/narratives/` |
+| **+** | **SKYNET UI** | 🟢 merged from PR #3 · see §12 | `src/components/skynet/` |
 
 **Component C is the known weak point.** It is regex and lexicons. It does not
 guess — unknown values return `null`, render as "Unknown", and the API reports
@@ -494,11 +495,69 @@ demoing this page.**
 
 ---
 
+## 12. SKYNET UI (PR #3, merged 2026-08-27)
+
+@Rishiraj-De's frontend overhaul, renamed from "NEXUS" to **SKYNET** (team name)
+on merge. Dark intelligence-console theme, a component kit in
+`src/components/skynet/`, and nine screens: `/`, `/narratives`,
+`/narratives/[id]`, `/sentiment`, `/trends`, `/network`, `/audience`,
+`/sources`, `/brief`. Build is 29 routes; `npm run verify` still exits 0.
+
+It also expands the corpus to **358 posts, 358/358 transformer-scored**
+(160 Instagram + 152 YouTube + 46 Telegram) and adds four mutation dimensions
+— entity, platform, community, amplification — for eight in total, weighted
+`0.25/0.15/0.15/0.10/0.10/0.10/0.08/0.07`.
+
+### What was NOT taken from the PR, and why
+
+**The PROGRESS.md rewrite was rejected wholesale.** It deleted §4c (the entire
+Meta token diagnosis), the `check:tokens` documentation, §4d (ML batch sizing),
+and engineering rules 5 and 6 — the two rules that stop someone reintroducing
+the `against`/`anxiety` and stance-vs-mood bugs. It also asserted things that
+are false: Instagram and Facebook as "🔴 blocked, Meta Business Verification
+4–6 wks" when both are live on a permanent token, and a corpus of "201 posts,
+Q = 0.83" when the PR's own `frozenCorpus.json` holds 358 and measures
+**Q = 0.2796** — verified by running `buildNetworkTopology` over it.
+
+### Three fixes applied on merge — do not revert them
+
+The four new dimensions did not carry the anti-fabrication discipline the
+original four were given in PR #2:
+
+1. **`computePlatformShift` and `computeCommunityShift` now respect
+   `MIN_STAGE_POSTS`.** Both are TVD over a distribution, so both saturate to
+   exactly 0 or 100 on a single-post stage — the identical bug fixed in
+   `sentimentShift`.
+2. **`computeCommunityShift` returns `null`, not `0`, when no post carries a
+   community.** `author.communityId` is written by the graph layer, never by
+   ingestion, so **0 of 358** corpus posts have one. Returning `0` claimed
+   measured stability for something entirely unobserved.
+3. **The composite renormalises over present dimensions instead of `?? 0`.**
+   Folding an unmeasured dimension in as a measured zero was both a false claim
+   and a silent penalty: every score was docked a fixed 8% of weight that no
+   evidence supported. Measured effect: the two scoreable narratives went from
+   29.9/23.1 to **32.5/25.1**.
+
+Still 2 of 25 narratives carry a composite score, because the PR #2 gate on the
+four core dimensions is intact. That remains correct for this corpus.
+
+### Known cosmetic issue
+
+The UI copy leans on "intercepted" / "INTERCEPT" for what is public data pulled
+from public APIs. Against an NTRO audience that word is legally loaded and
+overclaims what the system does. Worth softening to "collected" before the
+final round.
+
+---
+
 ## 10. Recent history
 
 | Commit | What changed |
 | :-- | :-- |
-| _(head)_ | Team brief for the internal round: `docs/team-brief.md` |
+| _(head)_ | Merged PR #3 — SKYNET UI, 358-post corpus, 8-dimension mutation, + 3 fixes |
+| `43560e7` | get-meta-token mints with only the scopes the app has enabled |
+| `bee0b12` | Meta outage root cause: blocked developer account |
+| `15becad` | Team brief for the internal round: `docs/team-brief.md` |
 | `b33f67d` | Narratives: stopped blaming the corpus for an unreachable ML service |
 | `acc8c40` | Merged PR #2 — Narrative Mutation Tracker from @Rishiraj-De, + 2 scoring fixes |
 | `a5af070` | Made `against`/`anxiety` reachable, decoupled stance from mood, rescore path |

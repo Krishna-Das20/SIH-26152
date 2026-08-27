@@ -50,3 +50,6 @@ ml/.env
 # HuggingFace model cache (multi-GB; never commit)
 .cache/
 models/
+
+# Agent configuration (may contain API keys)
+.agents/

@@ -1,19 +1,22 @@
 import { NextResponse } from 'next/server';
 import { tenantPosts } from '@/lib/tenant';
-import { analyzeNarratives, resetNarrativeCache } from '@/lib/narratives';
+import { analyzeNarratives, resetNarrativeCache, TimeWindowFilter } from '@/lib/narratives';
 
 /**
  * Narrative Mutation Tracker API
  *
- * GET  /api/analytics/narratives         — analyse the tenant corpus and return narratives
- * POST /api/analytics/narratives/analyze — force re-analysis (clears embedding cache)
+ * GET  /api/analytics/narratives?window=all&platform=all — analyse the tenant corpus and return narratives
+ * POST /api/analytics/narratives — force re-analysis (clears embedding cache)
  *
  * Uses `tenantPosts(req)` — the required tenant abstraction.
- * Accepts `?cutoffTime=` and `?platform=` query params via `applyFilters()`.
  */
 
 export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const windowParam = (searchParams.get('window') || 'all') as TimeWindowFilter;
+    const platformParam = searchParams.get('platform') || 'all';
+
     const { posts, mode } = await tenantPosts(req);
 
     if (posts.length < 2) {
@@ -27,13 +30,16 @@ export async function GET(req: Request) {
           clustering: 'union-find connected components',
           similarityThreshold: 0.70,
           embeddingModel: 'all-MiniLM-L6-v2',
-          mutationFormula: '0.40×semantic + 0.25×sentiment + 0.20×emotion + 0.15×keyword',
+          mutationFormula: '0.25·semantic + 0.15·sentiment + 0.15·emotion + 0.10·keyword + 0.10·entity + 0.10·platform + 0.08·community + 0.07·amplification',
         },
         note: 'Not enough posts to detect narratives. Ingest more data.',
       });
     }
 
-    const result = await analyzeNarratives(posts);
+    const result = await analyzeNarratives(posts, {
+      window: windowParam,
+      platform: platformParam,
+    });
 
     return NextResponse.json({
       mode,
@@ -54,11 +60,17 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    // Force re-analysis: clear the embedding cache
     resetNarrativeCache();
 
+    const { searchParams } = new URL(req.url);
+    const windowParam = (searchParams.get('window') || 'all') as TimeWindowFilter;
+    const platformParam = searchParams.get('platform') || 'all';
+
     const { posts, mode } = await tenantPosts(req);
-    const result = await analyzeNarratives(posts);
+    const result = await analyzeNarratives(posts, {
+      window: windowParam,
+      platform: platformParam,
+    });
 
     return NextResponse.json({
       mode,

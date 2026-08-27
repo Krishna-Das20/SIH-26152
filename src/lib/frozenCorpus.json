@@ -1,17 +1,279 @@
 {
-  "capturedAt": "2026-08-26T13:39:15.033Z",
-  "postCount": 352,
-  "mlScoredCount": 352,
+  "capturedAt": "2026-08-26T19:31:39.238Z",
+  "postCount": 358,
+  "mlScoredCount": 358,
   "platforms": {
-    "telegram": 40,
+    "telegram": 46,
     "youtube": 152,
     "instagram": 160
   },
   "window": {
     "from": "2021-01-28T06:33:26.000Z",
-    "to": "2026-08-24T21:21:51.000Z"
+    "to": "2026-08-26T19:12:34.000Z"
   },
   "posts": [
+    {
+      "id": "tg_telegram_460",
+      "platform": "telegram",
+      "author": {
+        "id": "usr_tg_telegram",
+        "username": "telegram",
+        "displayName": "Telegram News",
+        "platform": "telegram",
+        "followerCount": null,
+        "verified": false,
+        "estimatedAgeBracket": null,
+        "inferredLocation": null,
+        "detectedLanguage": "English",
+        "interests": []
+      },
+      "content": "For all the info from today's update and a look back at 13 years of Telegram features — check out our blog:\nhttps://telegram.org/blog/welcome-messages-buttons-TG-13\n\nAugust Features\n1 • 2 • 3 • 4 • 5 • More",
+      "timestamp": "2026-08-26T19:12:34.000Z",
+      "url": "https://t.me/telegram/460",
+      "likes": 0,
+      "shares": 0,
+      "replies": 0,
+      "views": 84700,
+      "hashtags": [
+        "#tg_telegram"
+      ],
+      "mentionedUsernames": [],
+      "sentiment": {
+        "score": 0.19,
+        "label": "neutral",
+        "nuancedEmotion": "neutral",
+        "sarcasmScore": 0,
+        "stance": "neutral",
+        "confidence": 0.8,
+        "keywords": [
+          "telegram features",
+          "years telegram",
+          "telegram",
+          "blog august",
+          "august features"
+        ],
+        "engine": "ml"
+      }
+    },
+    {
+      "id": "tg_telegram_459",
+      "platform": "telegram",
+      "author": {
+        "id": "usr_tg_telegram",
+        "username": "telegram",
+        "displayName": "Telegram News",
+        "platform": "telegram",
+        "followerCount": null,
+        "verified": false,
+        "estimatedAgeBracket": null,
+        "inferredLocation": null,
+        "detectedLanguage": "English",
+        "interests": []
+      },
+      "content": "Signed Gifts. You can now add your signature and a comment to gifts you buy via the gift marketplace.\n\nAugust Features\n1 • 2 • 3 • 4 • 5 • More",
+      "timestamp": "2026-08-26T19:12:24.000Z",
+      "url": "https://t.me/telegram/459",
+      "likes": 0,
+      "shares": 0,
+      "replies": 0,
+      "views": 80300,
+      "hashtags": [
+        "#tg_telegram"
+      ],
+      "mentionedUsernames": [],
+      "sentiment": {
+        "score": 0.15,
+        "label": "neutral",
+        "nuancedEmotion": "neutral",
+        "sarcasmScore": 0,
+        "stance": "neutral",
+        "confidence": 0.84,
+        "keywords": [
+          "signed gifts",
+          "comment gifts",
+          "gifts add",
+          "signature comment",
+          "add signature"
+        ],
+        "engine": "ml"
+      }
+    },
+    {
+      "id": "tg_telegram_458",
+      "platform": "telegram",
+      "author": {
+        "id": "usr_tg_telegram",
+        "username": "telegram",
+        "displayName": "Telegram News",
+        "platform": "telegram",
+        "followerCount": null,
+        "verified": false,
+        "estimatedAgeBracket": "18-24",
+        "inferredLocation": null,
+        "detectedLanguage": "English",
+        "interests": []
+      },
+      "content": "Placeholders for App Updates. If a user with an outdated app encounters a new feature, they can now instantly tap to download the latest update.\n\nAugust Features\n1 • 2 • 3 • 4 • 5 • More",
+      "timestamp": "2026-08-26T19:12:04.000Z",
+      "url": "https://t.me/telegram/458",
+      "likes": 0,
+      "shares": 0,
+      "replies": 0,
+      "views": 67000,
+      "hashtags": [
+        "#tg_telegram"
+      ],
+      "mentionedUsernames": [],
+      "sentiment": {
+        "score": 0.25,
+        "label": "neutral",
+        "nuancedEmotion": "neutral",
+        "sarcasmScore": 0,
+        "stance": "neutral",
+        "confidence": 0.73,
+        "keywords": [
+          "app updates",
+          "outdated app",
+          "tap download",
+          "august features",
+          "update august"
+        ],
+        "engine": "ml"
+      }
+    },
+    {
+      "id": "tg_telegram_457",
+      "platform": "telegram",
+      "author": {
+        "id": "usr_tg_telegram",
+        "username": "telegram",
+        "displayName": "Telegram News",
+        "platform": "telegram",
+        "followerCount": null,
+        "verified": false,
+        "estimatedAgeBracket": null,
+        "inferredLocation": null,
+        "detectedLanguage": "English",
+        "interests": [
+          "Entertainment & Sports"
+        ]
+      },
+      "content": "Inline Documents. The rich text editor now supports inline documents, files and music anywhere in your text.\n\nAugust Features\n1 • 2 • 3 • 4 • 5 • More",
+      "timestamp": "2026-08-26T19:11:54.000Z",
+      "url": "https://t.me/telegram/457",
+      "likes": 0,
+      "shares": 0,
+      "replies": 0,
+      "views": 66000,
+      "hashtags": [
+        "#tg_telegram"
+      ],
+      "mentionedUsernames": [],
+      "sentiment": {
+        "score": 0.56,
+        "label": "positive",
+        "nuancedEmotion": "neutral",
+        "sarcasmScore": 0,
+        "stance": "supportive",
+        "confidence": 0.57,
+        "keywords": [
+          "inline documents",
+          "text editor",
+          "editor supports",
+          "rich text",
+          "supports inline"
+        ],
+        "engine": "ml"
+      }
+    },
+    {
+      "id": "tg_telegram_456",
+      "platform": "telegram",
+      "author": {
+        "id": "usr_tg_telegram",
+        "username": "telegram",
+        "displayName": "Telegram News",
+        "platform": "telegram",
+        "followerCount": null,
+        "verified": false,
+        "estimatedAgeBracket": null,
+        "inferredLocation": null,
+        "detectedLanguage": "English",
+        "interests": [
+          "Tech & AI"
+        ]
+      },
+      "content": "Buttons Inside Messages. Developers are now able to put multiple buttons inside a message and create custom flows.\n\nAugust Features\n1 • 2 • 3 • 4 • 5 • More",
+      "timestamp": "2026-08-26T19:11:39.000Z",
+      "url": "https://t.me/telegram/456",
+      "likes": 0,
+      "shares": 0,
+      "replies": 0,
+      "views": 80200,
+      "hashtags": [
+        "#tg_telegram"
+      ],
+      "mentionedUsernames": [],
+      "sentiment": {
+        "score": 0.25,
+        "label": "neutral",
+        "nuancedEmotion": "neutral",
+        "sarcasmScore": 0,
+        "stance": "neutral",
+        "confidence": 0.73,
+        "keywords": [
+          "multiple buttons",
+          "custom flows",
+          "buttons inside",
+          "inside messages",
+          "messages developers"
+        ],
+        "engine": "ml"
+      }
+    },
+    {
+      "id": "tg_telegram_455",
+      "platform": "telegram",
+      "author": {
+        "id": "usr_tg_telegram",
+        "username": "telegram",
+        "displayName": "Telegram News",
+        "platform": "telegram",
+        "followerCount": null,
+        "verified": false,
+        "estimatedAgeBracket": null,
+        "inferredLocation": null,
+        "detectedLanguage": "English",
+        "interests": []
+      },
+      "content": "Welcome Messages. Group and channel owners can now add a message that appears when a new member joins.\n\nThese messages are only visible to the person who joins the chat.\n\nAugust Features\n1 • 2 • 3 • 4 • 5 • More",
+      "timestamp": "2026-08-26T19:11:05.000Z",
+      "url": "https://t.me/telegram/455",
+      "likes": 0,
+      "shares": 0,
+      "replies": 0,
+      "views": 86700,
+      "hashtags": [
+        "#tg_telegram"
+      ],
+      "mentionedUsernames": [],
+      "sentiment": {
+        "score": 0.17,
+        "label": "neutral",
+        "nuancedEmotion": "joy",
+        "sarcasmScore": 0,
+        "stance": "neutral",
+        "confidence": 0.82,
+        "keywords": [
+          "messages group",
+          "welcome messages",
+          "joins messages",
+          "chat august",
+          "messages visible"
+        ],
+        "engine": "ml"
+      }
+    },
     {
       "id": "tg_durov_544",
       "author": {

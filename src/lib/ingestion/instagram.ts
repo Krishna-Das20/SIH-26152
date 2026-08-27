@@ -174,21 +174,125 @@ async function graphGet(path: string): Promise<{ ok: boolean; code: number; json
   return { ok: true, code: res.status, json };
 }
 
+async function fetchInstagramWebPreview(url: string): Promise<SocialPost | null> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      cache: 'no-store',
+    });
+
+    if (!res.ok) return null;
+
+    const html = await res.text();
+
+    const descMatch =
+      html.match(/<meta\s+name="description"\s+content="([^"]*)"/i) ||
+      html.match(/<meta\s+property="og:description"\s+content="([^"]*)"/i);
+    const titleMatch =
+      html.match(/<meta\s+property="og:title"\s+content="([^"]*)"/i) ||
+      html.match(/<meta\s+name="twitter:title"\s+content="([^"]*)"/i);
+    const urlMatch = html.match(/<meta\s+property="og:url"\s+content="([^"]*)"/i);
+
+    const rawDesc = descMatch ? descMatch[1] : '';
+    const rawTitle = titleMatch ? titleMatch[1] : '';
+
+    let likes = 0;
+    let commentsCount = 0;
+    let author = 'instagram_creator';
+    let caption = '';
+
+    const statsMatch = rawDesc.match(/([\d,]+)\s+likes?,\s+([\d,]+)\s+comments?\s+-\s+([^\s]+)\s+on\s+([^:]+):\s*(.*)/is);
+    if (statsMatch) {
+      likes = parseInt(statsMatch[1].replace(/,/g, ''), 10) || 0;
+      commentsCount = parseInt(statsMatch[2].replace(/,/g, ''), 10) || 0;
+      author = statsMatch[3] || author;
+      caption = statsMatch[5]?.trim() || '';
+    } else {
+      caption = rawDesc || rawTitle;
+    }
+
+    caption = caption
+      .replace(/&quot;/g, '"')
+      .replace(/&#064;/g, '@')
+      .replace(/&#x2022;/g, '•')
+      .replace(/&#x2728;/g, '✨')
+      .replace(/&#x1f525;/g, '🔥')
+      .replace(/&#x1f4aa;/g, '💪')
+      .replace(/&#x1f440;/g, '👀')
+      .replace(/&amp;/g, '&')
+      .replace(/^"|"$/g, '')
+      .trim();
+
+    const shortcodeMatch = url.match(/\/(?:reel|p|reels)\/([^\/?#]+)/i);
+    const shortcode = shortcodeMatch ? shortcodeMatch[1] : `post_${Date.now()}`;
+
+    const sentiment = analyzeSentimentAndEmotion(caption);
+    const demo = inferDemographics('', caption);
+
+    return {
+      id: `ig_${shortcode}`,
+      platform: 'instagram',
+      author: {
+        id: `usr_ig_${author}`,
+        username: author,
+        displayName: author,
+        platform: 'instagram',
+        followerCount: null,
+        verified: false,
+        estimatedAgeBracket: demo.estimatedAgeBracket,
+        inferredLocation: demo.inferredLocation,
+        detectedLanguage: demo.detectedLanguage,
+        interests: demo.interests,
+      },
+      content: truncate(caption),
+      timestamp: new Date().toISOString(),
+      url: urlMatch ? urlMatch[1] : url,
+      likes,
+      shares: 0,
+      replies: commentsCount,
+      hashtags: extractHashtags(caption).length ? extractHashtags(caption) : ['#instagram'],
+      mentionedUsernames: extractMentions(caption),
+      sentiment,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export const instagramConnector: Connector = {
   platform: 'instagram',
   displayName: 'Instagram',
   tier: 'desirable',
   requiredEnv: ['INSTAGRAM_ACCESS_TOKEN', 'INSTAGRAM_BUSINESS_ID'],
-  worksWithoutCredentials: false,
+  worksWithoutCredentials: true,
   cost: 'free',
-  targetHint: 'a #hashtag to search, or leave blank for the connected account',
+  targetHint: 'an Instagram Reel/Post URL, #hashtag, or connected account',
   setupDoc: 'docs/platform-setup.md#instagram',
   notes:
-    'Needs an Instagram Business/Creator account linked to a Facebook Page. ' +
-    'Free, but account setup is required. Hashtag search is capped at 30 unique ' +
-    'hashtags per rolling 7 days.',
+    'Supports direct public Reel/Post web preview URLs without credentials. ' +
+    'Hashtag search and own-account media require an Instagram Business/Creator account.',
 
   async fetch(target, limit = 25): Promise<ConnectorResult> {
+    const input = (target || '').trim();
+
+    // 1. If target is a direct Instagram Reel or Post URL, use web preview
+    if (input.startsWith('http') || input.includes('instagram.com/')) {
+      const post = await fetchInstagramWebPreview(input);
+      if (post) {
+        return {
+          platform: 'instagram',
+          posts: [post],
+          status: 'ok',
+          source: 'web-preview',
+        };
+      }
+    }
+
+    // 2. Otherwise require Graph API credentials
     const required = ['INSTAGRAM_ACCESS_TOKEN', 'INSTAGRAM_BUSINESS_ID'];
     if (!hasEnv(required)) {
       return missingCredentials('instagram', required, 'docs/platform-setup.md#instagram');
@@ -196,7 +300,6 @@ export const instagramConnector: Connector = {
 
     const igId = process.env.INSTAGRAM_BUSINESS_ID!;
     const capped = Math.min(Math.max(limit, 1), 50);
-    const input = (target || '').trim();
 
     try {
       // ── Hashtag search over public media ──────────────────────────────
