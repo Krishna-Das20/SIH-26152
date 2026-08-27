@@ -11,6 +11,7 @@ import {
   truncate,
   extractHashtags,
   extractMentions,
+  safeHttpUrl,
 } from './types';
 
 /**
@@ -174,7 +175,38 @@ async function graphGet(path: string): Promise<{ ok: boolean; code: number; json
   return { ok: true, code: res.status, json };
 }
 
-async function fetchInstagramWebPreview(url: string): Promise<SocialPost | null> {
+/**
+ * Accepts a target ONLY if it is an https URL on instagram.com.
+ *
+ * The web-preview path issues a server-side fetch, so whoever controls this
+ * string controls the host, port and path of a request originating from
+ * INSIDE our network. A prefix test like `startsWith('http')` is not a host
+ * check: `http://169.254.169.254/latest/meta-data/` passes it, and the reply
+ * comes back through the og:/description scrapers below. That is server-side
+ * request forgery -- a scanner for internal services plus a read primitive
+ * against any of them that serves HTML meta tags.
+ *
+ * The connector is called Instagram, so an allowlist costs nothing. Returning
+ * null here makes fetch() fall through to the Graph API branch, which reports
+ * an honest status rather than silently succeeding.
+ */
+function instagramPreviewUrl(input: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(input);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'https:') return null;
+  const host = parsed.hostname.toLowerCase();
+  if (host !== 'instagram.com' && !host.endsWith('.instagram.com')) return null;
+  return parsed.toString();
+}
+
+async function fetchInstagramWebPreview(rawUrl: string): Promise<SocialPost | null> {
+  const url = instagramPreviewUrl(rawUrl);
+  if (!url) return null;
+
   try {
     const res = await fetch(url, {
       headers: {
@@ -183,6 +215,9 @@ async function fetchInstagramWebPreview(url: string): Promise<SocialPost | null>
         'Accept-Language': 'en-US,en;q=0.9',
       },
       cache: 'no-store',
+      // Without this an allowlisted instagram.com URL that 302s to an internal
+      // host walks straight back into the hole the allowlist just closed.
+      redirect: 'manual',
     });
 
     if (!res.ok) return null;
@@ -250,7 +285,11 @@ async function fetchInstagramWebPreview(url: string): Promise<SocialPost | null>
       },
       content: truncate(caption),
       timestamp: new Date().toISOString(),
-      url: urlMatch ? urlMatch[1] : url,
+      // og:url comes out of the FETCHED page, so it is only as trustworthy as
+      // that page. It ends up in an href, and a `javascript:` value there is
+      // executable script for every viewer. src/lib/urls.ts filters on read;
+      // this keeps the bad value out of the store in the first place.
+      url: safeHttpUrl(urlMatch?.[1]) || url,
       likes,
       shares: 0,
       replies: commentsCount,
@@ -279,8 +318,26 @@ export const instagramConnector: Connector = {
   async fetch(target, limit = 25): Promise<ConnectorResult> {
     const input = (target || '').trim();
 
-    // 1. If target is a direct Instagram Reel or Post URL, use web preview
-    if (input.startsWith('http') || input.includes('instagram.com/')) {
+    // 1. A URL target is answered by the web preview or not at all.
+    //
+    // Falling through to the own-account branch below would answer "fetch me
+    // THIS reel" with the connected account's OWN media and report status 'ok'
+    // -- the exact substitution this connector's route docstring forbids, and
+    // worse now that unusable URLs (including SSRF probes) are rejected up
+    // front rather than attempted. An analyst pasting a link must never be
+    // handed somebody else's posts labelled as the answer.
+    if (/^https?:\/\//i.test(input)) {
+      if (!instagramPreviewUrl(input)) {
+        return {
+          platform: 'instagram',
+          posts: [],
+          status: 'not-found',
+          note:
+            'Only https://instagram.com URLs can be read this way. ' +
+            'Pass a Reel/Post URL, a #hashtag, or leave the target blank for the connected account.',
+        };
+      }
+
       const post = await fetchInstagramWebPreview(input);
       if (post) {
         return {
@@ -290,6 +347,13 @@ export const instagramConnector: Connector = {
           source: 'web-preview',
         };
       }
+
+      return {
+        platform: 'instagram',
+        posts: [],
+        status: 'not-found',
+        note: 'Instagram returned no readable preview for that URL.',
+      };
     }
 
     // 2. Otherwise require Graph API credentials

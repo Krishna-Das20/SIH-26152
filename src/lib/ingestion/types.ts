@@ -108,6 +108,27 @@ export function truncate(text: string, max = 400): string {
   return text.length > max ? `${text.slice(0, max)}...` : text;
 }
 
+/**
+ * Returns `u` only if it parses as an http(s) URL, otherwise null.
+ *
+ * Use this on ANY url a connector lifts out of fetched content (an og:url meta
+ * tag, an embedded link, a redirect target) before putting it on a SocialPost.
+ * Those values reach `href` attributes in the dashboard, and React renders a
+ * `javascript:` href as-is -- so an unchecked one is stored XSS against every
+ * viewer, not just the person who ingested it.
+ *
+ * A `startsWith('http')` test is not sufficient: `httpfoo:` passes it.
+ */
+export function safeHttpUrl(u?: string | null): string | null {
+  if (!u) return null;
+  try {
+    const { protocol } = new URL(u);
+    return protocol === 'https:' || protocol === 'http:' ? u : null;
+  } catch {
+    return null;
+  }
+}
+
 export function extractHashtags(text: string): string[] {
   return Array.from(new Set(text.match(/#[\p{L}0-9_]+/gu) || []));
 }

@@ -1,12 +1,45 @@
 import { SocialPost, PlatformType } from '@/types/intelligence';
 
 /**
+ * Returns `u` only if it is a real http(s) URL, otherwise null.
+ *
+ * Every value in this module that comes from `post.url` MUST pass through here
+ * before it is returned, because the return values land straight in `href`
+ * attributes (PlatformFeed, MutationBreakpointDrawer, the narrative dossier).
+ * React does not block `javascript:` hrefs -- it warns and renders the
+ * attribute anyway -- and `target="_blank"` does not help either, since
+ * browsers ignore `target` for `javascript:` and run it in the current
+ * document. So an unchecked `post.url` in an href is executable script.
+ *
+ * `post.url` is NOT trustworthy: for web-preview ingests it is scraped from
+ * the `og:url` meta tag of a fetched page, and posts stored through
+ * /api/ingest carry no ownerUserId, so they render for every anonymous
+ * visitor to the demo dashboard. That makes an unchecked value stored,
+ * cross-user XSS rather than self-XSS.
+ *
+ * `startsWith('http')` is NOT an adequate check on its own -- `httpfoo:` and
+ * `javascript:x//http` both pass it. Parse the protocol instead.
+ */
+function safeExternal(u?: string | null): string | null {
+  if (!u) return null;
+  try {
+    const { protocol } = new URL(u);
+    return protocol === 'https:' || protocol === 'http:' ? u : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Resolves the direct external link for a social post or comment.
+ *
+ * URLs built from `post.id` below are safe by construction -- they are always
+ * interpolated after a literal `https://` origin, so no id can change the
+ * scheme. Only the `post.url` paths need filtering.
  */
 export function getPostUrl(post: Partial<SocialPost>): string | null {
-  if (post.url && post.url.startsWith('http')) {
-    return post.url;
-  }
+  const direct = safeExternal(post.url);
+  if (direct) return direct;
 
   const id = post.id || '';
   const platform = post.platform || 'youtube';
@@ -36,8 +69,7 @@ export function getPostUrl(post: Partial<SocialPost>): string | null {
   }
 
   if (platform === 'instagram') {
-    if (post.url) return post.url;
-    return 'https://www.instagram.com/';
+    return safeExternal(post.url) || 'https://www.instagram.com/';
   }
 
   if (platform === 'reddit') {
@@ -74,7 +106,7 @@ export function getParentSource(post: Partial<SocialPost>): {
 
     if (parentId.startsWith('ig_')) {
       return {
-        url: post.url || 'https://www.instagram.com/',
+        url: safeExternal(post.url) || 'https://www.instagram.com/',
         label: 'Source Reel / Post',
         id: parentId,
       };
@@ -89,16 +121,19 @@ export function getParentSource(post: Partial<SocialPost>): {
       };
     }
 
+    // Reached for any platform whose parent id has no known prefix, so this
+    // is not an Instagram-only sink.
     return {
-      url: post.url || null,
+      url: safeExternal(post.url),
       label: 'Parent Thread',
       id: parentId,
     };
   }
 
   // If YouTube comment URL has &lc=
-  if (post.url && post.url.includes('&lc=')) {
-    const videoUrl = post.url.split('&lc=')[0];
+  const commentUrl = safeExternal(post.url);
+  if (commentUrl && commentUrl.includes('&lc=')) {
+    const videoUrl = commentUrl.split('&lc=')[0];
     const videoId = videoUrl.split('v=')[1] || 'Source Video';
     return {
       url: videoUrl,

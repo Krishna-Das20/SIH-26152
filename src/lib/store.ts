@@ -166,6 +166,28 @@ export async function getAllPosts(): Promise<SocialPost[]> {
  * exactly what a judge is most likely to try. Seeding first keeps the database
  * a SUPERSET of the baseline instead of a replacement.
  */
+/**
+ * Scopes an upsert to documents owned by the SAME tenant as the incoming post.
+ *
+ * Upserting on `{ id }` alone lets one tenant's write land on another
+ * tenant's document: `$set` replaces the content while the existing
+ * `ownerUserId` survives, so the victim keeps seeing the row as theirs. It is
+ * reachable because ingested ids are derived from the target — an Instagram
+ * post ingested as `ig_<shortcode>` collides with the same media ingested by
+ * anyone else.
+ *
+ * Adding ownership to the FILTER means a demo-corpus write can only ever match
+ * a demo-corpus document, and an owned write only that owner's. A write aimed
+ * at someone else's id now fails the unique index on `id` instead of silently
+ * overwriting; `ordered: false` keeps the rest of the batch going, and the
+ * duplicate-key error is caught and logged below.
+ */
+function tenantScopedFilter(post: SocialPost): Record<string, unknown> {
+  return post.ownerUserId
+    ? { id: post.id, ownerUserId: post.ownerUserId }
+    : { id: post.id, ownerUserId: { $exists: false } };
+}
+
 async function seedBaselineIfEmpty(db: Db): Promise<void> {
   try {
     const existing = await db.collection('posts').countDocuments({}, { limit: 1 });
@@ -176,7 +198,7 @@ async function seedBaselineIfEmpty(db: Db): Promise<void> {
 
     await db.collection('posts').bulkWrite(
       base.map((post) => ({
-        updateOne: { filter: { id: post.id }, update: { $set: post }, upsert: true },
+        updateOne: { filter: tenantScopedFilter(post), update: { $set: post }, upsert: true },
       })),
       { ordered: false }
     );
@@ -245,7 +267,7 @@ export async function addPosts(newPosts: SocialPost[]): Promise<void> {
       await db.collection('posts').bulkWrite(
         newPosts.map((post) => ({
           updateOne: {
-            filter: { id: post.id },
+            filter: tenantScopedFilter(post),
             update: { $set: post },
             upsert: true,
           },

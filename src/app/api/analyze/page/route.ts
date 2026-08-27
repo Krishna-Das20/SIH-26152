@@ -33,6 +33,10 @@ export async function POST(req: Request) {
       );
     }
 
+    // `body.platform` is caller-supplied. getConnector() rejects anything that
+    // is not a real connector below, so this cannot reach arbitrary code — but
+    // choosing the connector also chooses which fetcher sees `rawTarget`, so
+    // keep the value constrained to the registry rather than trusting the body.
     const platform: PlatformType = requested || inferPlatform(rawTarget) || 'telegram';
     const connector = getConnector(platform);
 

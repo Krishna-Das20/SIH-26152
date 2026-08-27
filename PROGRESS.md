@@ -495,6 +495,64 @@ demoing this page.**
 
 ---
 
+## 14. Security review — 2026-08-27
+
+Two HIGH findings in the PR #3 web-preview path, both fixed. Regression tests
+live in `src/lib/__tests__/verify-url-safety.ts` (`npm run verify:urls`, part of
+`npm run verify`). **Confirmed they fail against the pre-fix code: 7 of 20.**
+
+### 1. SSRF — `src/lib/ingestion/instagram.ts`
+
+The web preview passed the caller's target straight to `fetch()`. The gate was
+`input.startsWith('http') || input.includes('instagram.com/')` — a prefix test,
+not a host test, so `http://169.254.169.254/...` passed and the caller
+controlled host, port and path of a request from inside our network. Reachable
+from `POST /api/analyze/page` and `POST /api/ingest`; `guardIngest()` only needs
+a session and registration is open.
+
+**This was demonstrated, not theorised.** Against the old code the regression
+test reached the local ML service and returned its response as a post:
+`refuses http://127.0.0.1:8000/health — status=ok posts=1`.
+
+Fixed by `instagramPreviewUrl()`: parse with `new URL`, require `https:`, require
+the host to be `instagram.com` or a subdomain. Also `redirect: 'manual'` on the
+fetch, or an allowlisted URL that 302s to an internal host walks back through
+the hole.
+
+### 2. Stored XSS — `src/lib/urls.ts`
+
+`getPostUrl()` guarded line 7 with `startsWith('http')` but the instagram branch
+re-returned `post.url` unchecked, and `getParentSource()` did the same twice —
+one of those on a branch that fires for **any** platform. These land in `href`
+attributes in six places. React renders a `javascript:` href as-is, and
+`target="_blank"` does not help.
+
+The source was `og:url` scraped from the fetched page, and `/api/ingest` stores
+posts with no `ownerUserId`, so `tenant.ts` serves them to **every anonymous
+visitor** — stored cross-user XSS, not self-XSS.
+
+Fixed with `safeExternal()` applied to all five `post.url` return paths, plus
+`safeHttpUrl()` in `src/lib/ingestion/types.ts` so the value is rejected at the
+ingestion boundary too. **Use `safeHttpUrl` on any URL a connector lifts out of
+fetched content.** `startsWith('http')` is not a scheme check — `httpfoo:`
+passes it.
+
+### 3. Cross-tenant overwrite — `src/lib/store.ts`
+
+Upserting on `{ id }` alone let one tenant's write land on another's document:
+`$set` replaced the content while the existing `ownerUserId` survived. Ingested
+ids derive from the target, so `ig_<shortcode>` collides across tenants.
+`tenantScopedFilter()` now puts ownership in the filter.
+
+### 4. Substituted results — found while verifying the SSRF fix
+
+Once unusable URLs were rejected, a URL target fell through to the own-account
+branch and returned the connected account's **own media** with `status: 'ok'` —
+the exact substitution `analyze/page`'s docstring forbids. A URL target is now
+answered by the web preview or by `not-found`, never by other data.
+
+---
+
 ## 13. Ad-hoc ingest — timings, and the bug it exposed
 
 The SKYNET dashboard has a live ingest console: paste a YouTube URL, Instagram
