@@ -4,6 +4,7 @@ import frozenCorpus from '@/lib/frozenCorpus.json';
 import type { Db } from 'mongodb';
 import { getDatabase } from '@/lib/mongodb';
 import { enrichPosts } from '@/lib/ml/client';
+import { fetchLiveSubredditStream } from '@/lib/ingestion/devvit';
 
 /**
  * Unified post store: MongoDB when reachable, in-memory otherwise.
@@ -32,12 +33,47 @@ declare global {
  *
  * Falls back to the synthetic generator only when no snapshot is present.
  */
+/** Newest-last, deduplicated by id. */
+function normalise(posts: SocialPost[]): SocialPost[] {
+  const byId = new Map<string, SocialPost>();
+  for (const p of posts) byId.set(p.id, p);
+  return Array.from(byId.values()).sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+}
+
 function baseline(): SocialPost[] {
   const frozen = (frozenCorpus as { posts?: SocialPost[] })?.posts;
   if (Array.isArray(frozen) && frozen.length > 0) {
+    const covered = new Set(frozen.map((p) => p.platform));
+    const demo = generateFullIntelligenceDataset();
+    // Exclude synthetic reddit data — Reddit is sourced live from Devvit
+    const missingPlatformPosts = demo.filter((p) => !covered.has(p.platform) && p.platform !== 'reddit');
+    if (missingPlatformPosts.length > 0) {
+      return normalise([...(frozen as SocialPost[]), ...missingPlatformPosts]);
+    }
     return frozen as SocialPost[];
   }
-  return generateFullIntelligenceDataset();
+  return generateFullIntelligenceDataset().filter((p) => p.platform !== 'reddit');
+}
+
+let _redditLiveSeeded = false;
+async function seedLiveRedditOnce(): Promise<void> {
+  if (_redditLiveSeeded) return;
+  _redditLiveSeeded = true;
+  try {
+    const current = cache();
+    const hasLiveReddit = current.some((p) => p.platform === 'reddit' && p.id.startsWith('reddit_devvit_'));
+    if (!hasLiveReddit) {
+      const livePosts = await fetchLiveSubredditStream('technology', 15);
+      if (livePosts.length > 0) {
+        const withoutSynthetic = current.filter((p) => p.platform !== 'reddit');
+        global._postsCache = normalise([...withoutSynthetic, ...livePosts]);
+      }
+    }
+  } catch (err) {
+    console.warn('[Store] Live Reddit Devvit initial stream skipped:', err);
+  }
 }
 
 /** Provenance of the demo baseline, surfaced so the UI can label it honestly. */
@@ -97,14 +133,6 @@ async function enrichBaselineOnce(): Promise<void> {
   }
 }
 
-/** Newest-last, deduplicated by id. */
-function normalise(posts: SocialPost[]): SocialPost[] {
-  const byId = new Map<string, SocialPost>();
-  for (const p of posts) byId.set(p.id, p);
-  return Array.from(byId.values()).sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
-}
 
 /**
  * Ensures the indexes the store depends on exist.
@@ -149,6 +177,7 @@ export async function getAllPosts(): Promise<SocialPost[]> {
     }
   }
   await enrichBaselineOnce();
+  await seedLiveRedditOnce();
   return cache();
 }
 

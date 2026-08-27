@@ -1,16 +1,34 @@
 import { NextResponse } from 'next/server';
 import { tenantPosts } from '@/lib/tenant';
+import { inferDemographics } from '@/lib/nlp/demographicProfiler';
 
 export async function GET(req: Request) {
 
   // Tenant-scoped: a signed-in user sees only their own data.
   const { posts } = await tenantPosts(req);
 
-  // Aggregate unique authors
+  // Aggregate unique authors and enrich inferences using latest profiler
   const authorMap = new Map<string, any>();
   for (const post of posts) {
-    if (!authorMap.has(post.author.id)) {
-      authorMap.set(post.author.id, post.author);
+    const authorId = post.author?.id || 'unknown';
+    if (!authorMap.has(authorId)) {
+      const author = { ...(post.author || {}) };
+      if (
+        !author.inferredLocation ||
+        !author.estimatedAgeBracket ||
+        !author.detectedLanguage ||
+        !author.interests ||
+        author.interests.length === 0
+      ) {
+        const inf = inferDemographics(author.bio || '', post.content || '', author.inferredLocation || undefined);
+        author.inferredLocation = author.inferredLocation || inf.inferredLocation;
+        author.estimatedAgeBracket = author.estimatedAgeBracket || inf.estimatedAgeBracket;
+        author.detectedLanguage = author.detectedLanguage || inf.detectedLanguage;
+        if (!author.interests || author.interests.length === 0) {
+          author.interests = inf.interests;
+        }
+      }
+      authorMap.set(authorId, author);
     }
   }
   const authors = Array.from(authorMap.values());

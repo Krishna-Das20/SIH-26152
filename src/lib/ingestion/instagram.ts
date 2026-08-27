@@ -174,7 +174,32 @@ async function graphGet(path: string): Promise<{ ok: boolean; code: number; json
   return { ok: true, code: res.status, json };
 }
 
-async function fetchInstagramWebPreview(url: string): Promise<SocialPost | null> {
+function findCommentEdges(obj: any): any[] {
+  if (!obj || typeof obj !== 'object') return [];
+  const found: any[] = [];
+
+  if (obj.comments_connection?.edges && Array.isArray(obj.comments_connection.edges)) {
+    found.push(...obj.comments_connection.edges);
+  }
+  if (obj.edge_media_to_parent_comment?.edges && Array.isArray(obj.edge_media_to_parent_comment.edges)) {
+    found.push(...obj.edge_media_to_parent_comment.edges);
+  }
+
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      found.push(...findCommentEdges(item));
+    }
+  } else {
+    for (const k of Object.keys(obj)) {
+      if (typeof obj[k] === 'object' && obj[k] !== null) {
+        found.push(...findCommentEdges(obj[k]));
+      }
+    }
+  }
+  return found;
+}
+
+export async function fetchInstagramRichData(url: string): Promise<SocialPost[]> {
   try {
     const res = await fetch(url, {
       headers: {
@@ -185,7 +210,7 @@ async function fetchInstagramWebPreview(url: string): Promise<SocialPost | null>
       cache: 'no-store',
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) return [];
 
     const html = await res.text();
 
@@ -233,7 +258,7 @@ async function fetchInstagramWebPreview(url: string): Promise<SocialPost | null>
     const sentiment = analyzeSentimentAndEmotion(caption);
     const demo = inferDemographics('', caption);
 
-    return {
+    const mainPost: SocialPost = {
       id: `ig_${shortcode}`,
       platform: 'instagram',
       author: {
@@ -258,8 +283,74 @@ async function fetchInstagramWebPreview(url: string): Promise<SocialPost | null>
       mentionedUsernames: extractMentions(caption),
       sentiment,
     };
-  } catch {
-    return null;
+
+    // Extract real embedded comments from JSON scripts
+    const jsonScripts = [...html.matchAll(/<script type="application\/json"[^>]*>(.*?)<\/script>/gs)];
+    let allEdges: any[] = [];
+    for (const s of jsonScripts) {
+      try {
+        const data = JSON.parse(s[1]);
+        const edges = findCommentEdges(data);
+        if (edges.length > 0) {
+          allEdges.push(...edges);
+        }
+      } catch {}
+    }
+
+    // Deduplicate comments by node id/pk
+    const seenIds = new Set<string>();
+    const commentPosts: SocialPost[] = [];
+
+    for (const edge of allEdges) {
+      const node = edge?.node;
+      const commentId = node?.id || node?.pk;
+      const text = (node?.text || '').trim();
+
+      if (!commentId || !text || seenIds.has(commentId)) continue;
+      seenIds.add(commentId);
+
+      const commenterUsername = node.user?.username || `ig_user_${commentId.slice(-6)}`;
+      const commenterDisplay = node.user?.full_name || commenterUsername;
+      const commentSentiment = analyzeSentimentAndEmotion(text);
+      const commentDemo = inferDemographics('', text);
+      const createdAt = node.created_at
+        ? new Date(node.created_at * 1000).toISOString()
+        : new Date().toISOString();
+
+      commentPosts.push({
+        id: `ig_c_${commentId}`,
+        platform: 'instagram',
+        author: {
+          id: `usr_ig_${commenterUsername}`,
+          username: commenterUsername,
+          displayName: commenterDisplay,
+          platform: 'instagram',
+          followerCount: null,
+          verified: Boolean(node.user?.is_verified),
+          estimatedAgeBracket: commentDemo.estimatedAgeBracket,
+          inferredLocation: commentDemo.inferredLocation,
+          detectedLanguage: commentDemo.detectedLanguage,
+          interests: commentDemo.interests,
+        },
+        content: truncate(text),
+        timestamp: createdAt,
+        url: urlMatch ? urlMatch[1] : url,
+        likes: node.comment_like_count || 0,
+        shares: 0,
+        replies: node.child_comment_count || 0,
+        inReplyToPostId: mainPost.id,
+        inReplyToAuthorId: mainPost.author.id,
+        hashtags: extractHashtags(text).length ? extractHashtags(text) : ['#comment'],
+        mentionedUsernames: extractMentions(text),
+        sentiment: commentSentiment,
+      });
+    }
+
+    // Return the main post followed by all extracted comments
+    return [mainPost, ...commentPosts];
+  } catch (err) {
+    console.error('Failed to extract Instagram rich data:', err);
+    return [];
   }
 }
 
@@ -273,21 +364,21 @@ export const instagramConnector: Connector = {
   targetHint: 'an Instagram Reel/Post URL, #hashtag, or connected account',
   setupDoc: 'docs/platform-setup.md#instagram',
   notes:
-    'Supports direct public Reel/Post web preview URLs without credentials. ' +
+    'Supports direct public Reel/Post web preview URLs with rich comment extraction without credentials. ' +
     'Hashtag search and own-account media require an Instagram Business/Creator account.',
 
   async fetch(target, limit = 25): Promise<ConnectorResult> {
     const input = (target || '').trim();
 
-    // 1. If target is a direct Instagram Reel or Post URL, use web preview
+    // 1. If target is a direct Instagram Reel or Post URL, use rich web extractor
     if (input.startsWith('http') || input.includes('instagram.com/')) {
-      const post = await fetchInstagramWebPreview(input);
-      if (post) {
+      const posts = await fetchInstagramRichData(input);
+      if (posts.length > 0) {
         return {
           platform: 'instagram',
-          posts: [post],
+          posts,
           status: 'ok',
-          source: 'web-preview',
+          source: 'web-rich-preview',
         };
       }
     }

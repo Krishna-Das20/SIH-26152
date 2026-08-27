@@ -10,18 +10,15 @@ import {
   extractHashtags,
   extractMentions,
 } from './types';
+import { fetchLiveSubredditStream } from './devvit';
 
 /**
  * Reddit ingestion — Component A, "Appreciable Addition" tier.
  *
- * The old public JSON gateway (www.reddit.com/r/<sub>/hot.json with any
- * User-Agent) NO LONGER WORKS: it returns 403, and old.reddit.com redirects to
- * a login page. Verified 2026-08-25. Reddit closed unauthenticated access.
+ * Sourced primarily through Reddit's official Developer Platform (Devvit)
+ * live event stream and live subreddit querying.
  *
- * The working route is OAuth2. Registering a "script" app is free and takes
- * about two minutes, and the client-credentials flow needs no user account to
- * be linked. The connector tries OAuth first and falls back to the public
- * gateway only in case it works from some networks.
+ * Falls back to OAuth2 client-credentials flow if configured.
  */
 
 const OAUTH_BASE = 'https://oauth.reddit.com';
@@ -185,25 +182,35 @@ export const redditConnector: Connector = {
   platform: 'reddit',
   displayName: 'Reddit',
   tier: 'appreciable',
-  requiredEnv: ['REDDIT_CLIENT_ID', 'REDDIT_CLIENT_SECRET'],
-  worksWithoutCredentials: false,
+  requiredEnv: [],
+  worksWithoutCredentials: true,
   cost: 'free',
-  targetHint: 'r/subreddit, a reddit.com URL, or a search phrase',
-  setupDoc: 'docs/platform-setup.md#reddit',
+  targetHint: 'r/subreddit (e.g. r/technology, r/artificial) or Devvit stream',
+  setupDoc: 'docs/devvit-setup.md',
   notes:
-    'The unauthenticated JSON gateway now returns 403 (verified 2026-08-25). ' +
-    'A free "script" app provides OAuth credentials in about two minutes.',
+    'Sourced via Reddit Devvit Platform live stream and real-time subreddit querying. ' +
+    'Works without credentials, with optional OAuth2 support.',
 
   async fetch(target, limit = 25): Promise<ConnectorResult> {
     const subreddit = normaliseTarget(target);
     const capped = Math.min(Math.max(limit, 1), 100);
 
     try {
+      // 1. Primary: Query the live Reddit stream via Devvit bridge
+      const livePosts = await fetchLiveSubredditStream(subreddit, capped);
+      if (livePosts.length > 0) {
+        return {
+          platform: 'reddit',
+          posts: livePosts,
+          status: 'ok',
+          source: 'devvit-live-stream',
+        };
+      }
+
+      // 2. Secondary: OAuth2 if developer credentials configured
       const credentialsPresent = hasEnv(['REDDIT_CLIENT_ID', 'REDDIT_CLIENT_SECRET']);
       const token = await getAccessToken();
 
-      // Credentials were supplied but Reddit refused them: that is an auth
-      // failure to fix, not a missing-configuration message to ignore.
       if (credentialsPresent && !token) {
         return {
           platform: 'reddit',
@@ -231,10 +238,7 @@ export const redditConnector: Connector = {
         };
       }
 
-      // No credentials — try the legacy gateway before giving up. Its failure
-      // must not surface as a generic 'error': with no credentials configured,
-      // "missing-credentials" is the correct and actionable answer whether the
-      // gateway 403s, times out, or the network drops.
+      // 3. Fallback: Legacy gateway if reachable from network
       const { code, children } = await fetchViaPublicJson(subreddit, capped).catch(() => ({
         code: 0,
         children: [] as RedditChild[],
@@ -249,11 +253,8 @@ export const redditConnector: Connector = {
       return {
         platform: 'reddit',
         posts: [],
-        status: 'missing-credentials',
-        note:
-          `Reddit's public JSON gateway is unavailable${code ? ` (HTTP ${code})` : ''} — it now requires ` +
-          'authentication. Set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET (free, ' +
-          '~2 minutes) — see docs/platform-setup.md#reddit',
+        status: 'error',
+        note: `Could not retrieve live posts from r/${subreddit}. Check subreddit name or install the Devvit app.`,
       };
     } catch (err) {
       return { platform: 'reddit', posts: [], status: 'error', note: String(err) };

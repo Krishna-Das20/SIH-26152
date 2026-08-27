@@ -20,6 +20,11 @@ import {
   CheckCircle2,
   AlertCircle,
   ArrowRight,
+  RefreshCw,
+  Play,
+  Pause,
+  Sparkles,
+  Clock,
 } from 'lucide-react';
 import { SocialPost, PlatformType } from '@/types/intelligence';
 
@@ -129,6 +134,7 @@ export default function OverviewPage() {
   const [activeTab, setActiveTab] = useState<PlatformTab>('all');
   const [metrics, setMetrics] = useState({
     totalPosts: 0,
+    unifiedTotalPosts: 0,
     activeNodes: 0,
     averageSentiment: 0,
     sarcasmIndex: 0,
@@ -152,6 +158,13 @@ export default function OverviewPage() {
   const [ingesting, setIngesting] = useState(false);
   const [ingestStatus, setIngestStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Real-time Instagram Comment Sync State
+  const [instaSyncActive, setInstaSyncActive] = useState(true);
+  const [syncingInsta, setSyncingInsta] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+  const [syncTargetUrl, setSyncTargetUrl] = useState('https://www.instagram.com/reel/DcHEonOvCLB/');
+
   const fetchPlatformData = useCallback(
     async (platform: PlatformTab, isRefresh = false) => {
       if (isRefresh) setRefreshing(true);
@@ -174,7 +187,18 @@ export default function OverviewPage() {
           fetch(`/api/posts${postQuery}`).then((r) => r.json()).catch(() => null),
         ]);
 
-        if (overviewRes && !overviewRes.error) setMetrics(overviewRes);
+        if (overviewRes && !overviewRes.error) {
+          setMetrics((prev) => ({
+            ...overviewRes,
+            unifiedTotalPosts:
+              overviewRes.unifiedTotalPosts ??
+              (platform === 'all' ? overviewRes.totalPosts : prev.unifiedTotalPosts),
+            platformBreakdown:
+              overviewRes.platformBreakdown && Object.keys(overviewRes.platformBreakdown).length > 0
+                ? overviewRes.platformBreakdown
+                : prev.platformBreakdown,
+          }));
+        }
         if (sentRes && !sentRes.error) setSentimentData(sentRes);
         if (trendsRes?.trends) setTrends(trendsRes.trends);
         if (narrativeRes?.narratives) setNarrativeCount(narrativeRes.narratives.length);
@@ -188,6 +212,76 @@ export default function OverviewPage() {
     },
     []
   );
+
+  const triggerInstaSync = useCallback(
+    async (targetOverride?: string) => {
+      const target = targetOverride || syncTargetUrl;
+      if (!target) return;
+      setSyncingInsta(true);
+      try {
+        const res = await fetch('/api/instagram/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetUrl: target }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setLastSyncTime(new Date().toLocaleTimeString());
+          if (data.newCommentsCount > 0) {
+            setSyncFeedback(`Captured & scored ${data.newCommentsCount} new live comment(s)!`);
+            await fetchPlatformData(activeTab, false);
+          } else {
+            setSyncFeedback(`Sync active: ${data.totalExtracted || 0} comments verified & up-to-date.`);
+          }
+        } else {
+          setSyncFeedback(data.message || 'Sync check completed.');
+        }
+      } catch (e: any) {
+        console.error('Real-time sync failed:', e);
+      } finally {
+        setSyncingInsta(false);
+      }
+    },
+    [syncTargetUrl, activeTab, fetchPlatformData]
+  );
+
+  useEffect(() => {
+    if (!instaSyncActive || (activeTab !== 'instagram' && activeTab !== 'all')) return;
+    const interval = setInterval(() => {
+      triggerInstaSync();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [instaSyncActive, activeTab, triggerInstaSync]);
+
+  // Reddit Devvit Live Stream State
+  const [devvitTarget, setDevvitTarget] = useState('r/technology');
+  const [syncingDevvit, setSyncingDevvit] = useState(false);
+  const [devvitFeedback, setDevvitFeedback] = useState<string | null>(null);
+
+  const handleDevvitSync = async (targetOverride?: string) => {
+    const sub = targetOverride || devvitTarget;
+    if (!sub) return;
+    setSyncingDevvit(true);
+    setDevvitFeedback(null);
+    try {
+      const res = await fetch('/api/devvit/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subreddit: sub }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDevvitFeedback(data.message || `Captured ${data.ingestedCount} live posts from r/${data.subreddit}!`);
+        await fetchPlatformData(activeTab, false);
+      } else {
+        setDevvitFeedback(data.message || 'Live fetch failed.');
+      }
+    } catch (e: any) {
+      setDevvitFeedback(e.message || 'Devvit sync request failed.');
+    } finally {
+      setSyncingDevvit(false);
+    }
+  };
 
   const handleLiveIngest = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -262,7 +356,9 @@ export default function OverviewPage() {
               <span>Select Platform Command Screen</span>
             </span>
             <span className="text-[11px] text-nexus-muted">
-              {metrics.totalPosts} total intercepted posts in active scope
+              {activeTab === 'all'
+                ? `${metrics.unifiedTotalPosts || metrics.totalPosts} total intercepted posts in active scope`
+                : `${metrics.totalPosts} on ${currentPlatform.shortName} (${metrics.unifiedTotalPosts || metrics.totalPosts} unified total)`}
             </span>
           </div>
 
@@ -270,7 +366,10 @@ export default function OverviewPage() {
             {(Object.keys(PLATFORMS) as PlatformTab[]).map((pKey) => {
               const p = PLATFORMS[pKey];
               const isSelected = activeTab === pKey;
-              const count = pKey === 'all' ? metrics.totalPosts : platformCounts[pKey] || 0;
+              const count =
+                pKey === 'all'
+                  ? metrics.unifiedTotalPosts || metrics.totalPosts
+                  : platformCounts[pKey] ?? 0;
 
               return (
                 <button
@@ -306,7 +405,7 @@ export default function OverviewPage() {
                     <span className="text-[9px] text-nexus-muted uppercase font-mono block mt-0.5">
                       {pKey === 'all'
                         ? 'Unified'
-                        : p.live || count > 0
+                        : count > 0 || p.live
                         ? 'Live Corpus'
                         : 'Dormant'}
                     </span>
@@ -499,6 +598,176 @@ export default function OverviewPage() {
             </div>
           )}
         </div>
+
+        {/* Real-Time Instagram Comment Sync Console */}
+        {(activeTab === 'instagram' || activeTab === 'all') && (
+          <div className="rounded-2xl p-5 mb-8 border border-pink-500/30 bg-gradient-to-r from-pink-950/20 via-nexus-surface to-purple-950/20 relative overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-3 w-3">
+                  {instaSyncActive ? (
+                    <>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-pink-500"></span>
+                    </>
+                  ) : (
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-slate-500"></span>
+                  )}
+                </span>
+                <span className="text-xs font-mono uppercase font-bold text-pink-400 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Real-Time Instagram Comment Sync Engine</span>
+                </span>
+                <span
+                  className={`text-[9px] font-mono uppercase px-2 py-0.5 rounded ${
+                    instaSyncActive
+                      ? 'bg-pink-500/20 text-pink-300 border border-pink-500/40'
+                      : 'bg-slate-800 text-slate-400 border border-slate-700'
+                  }`}
+                >
+                  {instaSyncActive ? 'Live Polling Active (15s)' : 'Sync Paused'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setInstaSyncActive(!instaSyncActive)}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                    instaSyncActive
+                      ? 'bg-nexus-surface border-pink-500/40 text-pink-300 hover:bg-pink-500/10'
+                      : 'bg-nexus-surface border-nexus-border text-nexus-text-secondary hover:text-nexus-text-primary'
+                  }`}
+                >
+                  {instaSyncActive ? (
+                    <>
+                      <Pause className="w-3.5 h-3.5 text-pink-400" />
+                      <span>Pause Sync</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3.5 h-3.5 text-nexus-positive" />
+                      <span>Resume Sync</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => triggerInstaSync()}
+                  disabled={syncingInsta}
+                  className="px-3.5 py-1.5 rounded-lg bg-pink-500 text-white text-xs font-bold hover:bg-pink-600 transition-all flex items-center gap-1.5 shadow-md shadow-pink-500/20 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncingInsta ? 'animate-spin' : ''}`} />
+                  <span>{syncingInsta ? 'Syncing...' : 'Sync Comments Now'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2.5">
+              <div className="relative flex-1 w-full">
+                <input
+                  type="text"
+                  placeholder="Target Reel/Post URL to sync comments (e.g. https://www.instagram.com/reel/DcHEonOvCLB/)"
+                  value={syncTargetUrl}
+                  onChange={(e) => setSyncTargetUrl(e.target.value)}
+                  className="w-full px-4 py-2 rounded-xl bg-nexus-surface-secondary border border-pink-500/30 text-xs text-nexus-text-primary placeholder:text-nexus-muted focus:outline-none focus:border-pink-500 transition-all font-mono"
+                />
+              </div>
+              <div className="text-[11px] font-mono text-nexus-muted flex items-center gap-2 flex-shrink-0">
+                <Clock className="w-3.5 h-3.5 text-pink-400" />
+                <span>Last Sync: {lastSyncTime || 'Pending initial pulse'}</span>
+              </div>
+            </div>
+
+            {/* Sync Feedback Message */}
+            {syncFeedback && (
+              <div className="mt-2.5 pt-2 border-t border-pink-500/20 flex items-center justify-between text-xs">
+                <span className="text-pink-300 font-medium flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-pink-400 flex-shrink-0" />
+                  <span>{syncFeedback}</span>
+                </span>
+                <span className="text-[10px] text-nexus-muted font-mono">
+                  {metrics.platformBreakdown?.instagram || 0} Instagram posts & comments in corpus
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Reddit Devvit Live Stream Console */}
+        {(activeTab === 'reddit' || activeTab === 'all') && (
+          <div className="rounded-2xl p-5 mb-8 border border-orange-500/30 bg-gradient-to-r from-orange-950/20 via-nexus-surface to-amber-950/20 relative overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span>
+                </span>
+                <span className="text-xs font-mono uppercase font-bold text-orange-400 flex items-center gap-1.5">
+                  <Radio className="w-3.5 h-3.5" />
+                  <span>Reddit Devvit Live Stream Engine</span>
+                </span>
+                <span className="text-[9px] font-mono uppercase px-2 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/40">
+                  Reddit Developer Platform Active
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDevvitSync()}
+                  disabled={syncingDevvit}
+                  className="px-3.5 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-bold hover:bg-orange-600 transition-all flex items-center gap-1.5 shadow-md shadow-orange-500/20 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncingDevvit ? 'animate-spin' : ''}`} />
+                  <span>{syncingDevvit ? 'Streaming from Reddit...' : 'Fetch Live via Devvit'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2.5">
+              <div className="relative flex-1 w-full">
+                <input
+                  type="text"
+                  placeholder="Enter Subreddit to stream live (e.g. r/technology, r/artificial, r/news, r/india)"
+                  value={devvitTarget}
+                  onChange={(e) => setDevvitTarget(e.target.value)}
+                  className="w-full px-4 py-2 rounded-xl bg-nexus-surface-secondary border border-orange-500/30 text-xs text-nexus-text-primary placeholder:text-nexus-muted focus:outline-none focus:border-orange-500 transition-all font-mono"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] text-nexus-muted font-mono">Live presets:</span>
+                {['r/technology', 'r/artificial', 'r/news', 'r/science', 'r/india'].map((sub) => (
+                  <button
+                    key={sub}
+                    type="button"
+                    onClick={() => {
+                      setDevvitTarget(sub);
+                      handleDevvitSync(sub);
+                    }}
+                    className="px-2 py-0.5 rounded bg-nexus-surface-secondary text-orange-300 hover:text-white border border-orange-500/30 font-mono text-[10px] transition-colors"
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Sync Feedback Message */}
+            {devvitFeedback && (
+              <div className="mt-2.5 pt-2 border-t border-orange-500/20 flex items-center justify-between text-xs">
+                <span className="text-orange-300 font-medium flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />
+                  <span>{devvitFeedback}</span>
+                </span>
+                <span className="text-[10px] text-nexus-muted font-mono">
+                  {metrics.platformBreakdown?.reddit || 0} Live Reddit posts in corpus
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         {loading ? (
           <div className="flex items-center justify-center py-20">

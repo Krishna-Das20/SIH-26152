@@ -88,41 +88,48 @@ export function clusterNarratives(
   const n = items.length;
   if (n < MIN_NARRATIVE_SIZE) return [];
 
-  const uf = new UnionFind(n);
-
-  // O(n²) pairwise similarity — trivial for 200 posts
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      const sim = cosineSimilarity(items[i].embedding, items[j].embedding);
-      if (sim >= threshold) {
-        uf.union(i, j);
+  const runClustering = (t: number) => {
+    const uf = new UnionFind(n);
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const sim = cosineSimilarity(items[i].embedding, items[j].embedding);
+        if (sim >= t) {
+          uf.union(i, j);
+        }
       }
     }
+
+    const groups = new Map<number, number[]>();
+    for (let i = 0; i < n; i++) {
+      const root = uf.find(i);
+      const list = groups.get(root);
+      if (list) list.push(i);
+      else groups.set(root, [i]);
+    }
+
+    const clusters: NarrativeCluster[] = [];
+    for (const indices of groups.values()) {
+      if (indices.length < MIN_NARRATIVE_SIZE) continue;
+      const postIds = indices.map((i) => items[i].id).sort();
+      clusters.push({
+        postIds,
+        narrativeId: generateNarrativeId(postIds),
+      });
+    }
+    clusters.sort((a, b) => b.postIds.length - a.postIds.length);
+    return clusters;
+  };
+
+  // Try default threshold first
+  let clusters = runClustering(threshold);
+
+  // If no clusters formed at a strict threshold, adaptively relax down to 0.35
+  if (clusters.length === 0 && threshold > 0.40) {
+    clusters = runClustering(0.40);
   }
-
-  // Group indices by their root
-  const groups = new Map<number, number[]>();
-  for (let i = 0; i < n; i++) {
-    const root = uf.find(i);
-    const list = groups.get(root);
-    if (list) list.push(i);
-    else groups.set(root, [i]);
+  if (clusters.length === 0 && threshold > 0.30) {
+    clusters = runClustering(0.30);
   }
-
-  // Convert to clusters, filter by minimum size
-  const clusters: NarrativeCluster[] = [];
-  for (const indices of groups.values()) {
-    if (indices.length < MIN_NARRATIVE_SIZE) continue;
-
-    const postIds = indices.map((i) => items[i].id).sort();
-    clusters.push({
-      postIds,
-      narrativeId: generateNarrativeId(postIds),
-    });
-  }
-
-  // Sort clusters by size descending for stable ordering
-  clusters.sort((a, b) => b.postIds.length - a.postIds.length);
 
   return clusters;
 }
