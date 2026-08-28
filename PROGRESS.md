@@ -559,6 +559,21 @@ shift, and every mutation score inherited the error. Restored to true cosine.
 became a live `<table>` in post text only after stripping had finished. Decode
 first, then strip.
 
+### The trained model file MUST be committed
+
+`src/lib/models/trained_skynet_nlp.json` is imported statically by
+`emotionEngine.ts`, `titleGenerator.ts` and `embeddings.ts`. Without it the
+build fails with three "Module not found" errors.
+
+`.gitignore` had a bare `models/`, which matches a directory of that name at
+**any depth** — so `git add -A` silently skipped this file and the first merge
+commit shipped a `main` that could not compile. The pattern is now anchored
+(`/models/` and `ml/models/`). Regenerate with:
+
+```bash
+cd ml && .venv/Scripts/python.exe train_models.py && cp models/trained_skynet_nlp.json ../src/lib/models/
+```
+
 ### The trainer's accuracy figures are NOT held-out
 
 `ml/train_models.py` prints "Sentiment Model Accuracy/F1: 0.80" and "Stance:
