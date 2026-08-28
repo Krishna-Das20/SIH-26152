@@ -1,11 +1,17 @@
 # PROGRESS.md — current status & where to start
 
 > **Read this first, then [AGENTS.md](AGENTS.md) for architecture.**
+> **Explaining the system?** [`docs/architecture.md`](docs/architecture.md) —
+> how it works, in plain language, with ASCII diagrams. Also as `.docx` and
+> `.pdf` in the same folder for sending to teammates.
+>
 > **Presenting?** [`docs/team-brief.md`](docs/team-brief.md) is the deck-building
 > brief — slide-by-slide content, the demo script, and rehearsed answers to the
 > questions judges ask. `docs/team-brief.docx` is the same content for Word;
 > the markdown is the source, so edit it and run `npm run build:brief` rather
-> than editing the .docx by hand.
+> than editing the .docx by hand. The converter takes a path, so
+> `python scripts/build_brief_docx.py docs/architecture.md` renders that one
+> instead. PDFs are made from the .docx through Word (`SaveAs` format 17).
 > This file is the handover note. AGENTS.md explains *how the system is built*;
 > this file explains *what state it is in right now and what to do next*.
 >

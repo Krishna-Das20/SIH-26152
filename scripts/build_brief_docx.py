@@ -32,8 +32,10 @@ except ImportError:  # pragma: no cover
     sys.exit("python-docx is not installed.  Run:  pip install python-docx")
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "docs" / "team-brief.md"
-OUT = ROOT / "docs" / "team-brief.docx"
+
+# Any markdown file under docs/ can be rendered. Defaults to the team brief so
+# the original `python scripts/build_brief_docx.py` keeps working unchanged.
+DEFAULT_SRC = ROOT / "docs" / "team-brief.md"
 
 # ── Palette ───────────────────────────────────────────────────────────────
 # Matches the styled web version: indigo accent, cool neutrals, semantic
@@ -194,6 +196,26 @@ def emit_table(doc, rows: list[list[str]]) -> None:
                 add_inline(para, text, base_size=9.5)
 
 
+def emit_code(doc, lines: list[str]) -> None:
+    """Fenced blocks become a shaded monospace panel.
+
+    ASCII diagrams only hold their shape in a fixed-width font, and Word will
+    happily reflow them into nonsense otherwise. Each source line becomes its
+    own paragraph with no spacing, so the drawing survives.
+    """
+    for raw in lines:
+        p = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(0)
+        p.paragraph_format.left_indent = Inches(0.12)
+        p.paragraph_format.line_spacing = 1.0
+        para_shading(p, "F4F6F9")
+        run = p.add_run(raw if raw else " ")
+        run.font.name = MONO_FONT
+        run.font.size = Pt(8.5)
+        run.font.color.rgb = INK
+
+
 def emit_quote(doc, lines: list[str]) -> None:
     """Blockquotes become shaded callouts with an accent rule.
 
@@ -290,6 +312,17 @@ def convert(md: str) -> Document:
         line = lines[i]
         stripped = line.strip()
 
+        if stripped.startswith("```"):
+            flush()
+            i += 1
+            block: list[str] = []
+            while i < len(lines) and not lines[i].strip().startswith("```"):
+                block.append(lines[i].rstrip())
+                i += 1
+            i += 1  # consume the closing fence
+            emit_code(doc, block)
+            continue
+
         if stripped.startswith("|"):
             if para_buf or quote_buf:
                 flush()
@@ -356,13 +389,16 @@ def convert(md: str) -> Document:
 
 
 def main() -> None:
-    if not SRC.exists():
-        sys.exit(f"Source not found: {SRC}")
-    doc = convert(SRC.read_text(encoding="utf-8"))
-    doc.save(OUT)
-    size_kb = OUT.stat().st_size / 1024
-    print(f"Wrote {OUT.relative_to(ROOT)}  ({size_kb:.0f} KB)")
-    print("Source of truth is docs/team-brief.md -- edit that, then re-run this.")
+    src = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_SRC
+    if not src.exists():
+        sys.exit(f"Source not found: {src}")
+
+    out = src.with_suffix(".docx")
+    doc = convert(src.read_text(encoding="utf-8"))
+    doc.save(out)
+    size_kb = out.stat().st_size / 1024
+    print(f"Wrote {out.relative_to(ROOT)}  ({size_kb:.0f} KB)")
+    print(f"Source of truth is {src.relative_to(ROOT)} -- edit that, then re-run this.")
 
 
 if __name__ == "__main__":
