@@ -120,7 +120,13 @@ export function NarrativeEvolutionMap({ narrative, onSelectBreakpoint }: Props) 
                         {isOrigin ? 'T0 · ORIGIN' : isLatest ? `T${idx} · LATEST` : `T${idx} · TRANSITION`}
                       </span>
                       <span className="text-[10px] font-mono text-skynet-muted">
-                        {new Date(st.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                        {new Date(st.timestamp).toLocaleDateString([], {
+                          month: 'short',
+                          day: 'numeric',
+                          // The corpus spans multiple years; without this a
+                          // chronological trajectory reads as going backwards.
+                          year: '2-digit',
+                        })}
                       </span>
                     </div>
 

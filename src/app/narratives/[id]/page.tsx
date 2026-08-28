@@ -322,6 +322,9 @@ export default function NarrativeDetailPage() {
                         {new Date(post.timestamp).toLocaleDateString([], {
                           month: 'short',
                           day: 'numeric',
+                          // Corpus spans 2024-2026 -- without the year an
+                          // ordered timeline looks like it runs backwards.
+                          year: '2-digit',
                           hour: '2-digit',
                           minute: '2-digit',
                         })}{' '}

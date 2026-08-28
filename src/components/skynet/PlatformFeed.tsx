@@ -52,7 +52,7 @@ export function PlatformFeed({ posts, platformName }: Props) {
               </span>
             </h3>
             <p className="text-xs text-neutral-400 mt-0.5 font-medium">
-              Verified social signals, authentic comments, RoBERTa sentiment scoring, and source links.
+              Live platform captures with transformer sentiment scoring and links to the original post.
             </p>
           </div>
 
@@ -114,6 +114,9 @@ export function PlatformFeed({ posts, platformName }: Props) {
                         {new Date(post.timestamp).toLocaleDateString([], {
                           month: 'short',
                           day: 'numeric',
+                          // The feed mixes posts from 2021 to 2026. Without a
+                          // year, an ordered feed looks randomly shuffled.
+                          year: '2-digit',
                           hour: '2-digit',
                           minute: '2-digit',
                         })}

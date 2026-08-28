@@ -413,7 +413,7 @@ export default function OverviewPage() {
             <div className="flex items-center gap-2 px-3 py-1 rounded-full liquid-glass-badge">
               <SkynetLogo size={14} withGlow={false} />
               <span className="text-[10px] font-mono uppercase tracking-[0.25em] text-cyan-300 font-bold">
-                SKYNET NEURAL OSINT • NTRO CERTIFIED
+                SKYNET NEURAL OSINT • SIH 2026 · PS SIH26152 (NTRO)
               </span>
             </div>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#10B981]" />
@@ -817,14 +817,14 @@ export default function OverviewPage() {
             }
             changeType="positive"
             icon={<BarChart3 className="w-4 h-4" />}
-            subtitle="Verified multi-platform social captures"
+            subtitle="Captured from live platform APIs, transformer-scored"
           />
 
           <MetricCard
             label="Unique Network Entities"
             value={metrics.activeNodes.toLocaleString()}
-            change="100% Verified"
-            changeType="positive"
+            change="Distinct authors"
+            changeType="neutral"
             icon={<Users className="w-4 h-4" />}
             subtitle="Active accounts & community nodes"
           />

@@ -45,19 +45,35 @@ function normalise(posts: SocialPost[]): SocialPost[] {
 function baseline(): SocialPost[] {
   const frozen = (frozenCorpus as { posts?: SocialPost[] })?.posts;
   if (Array.isArray(frozen) && frozen.length > 0) {
-    const covered = new Set(frozen.map((p) => p.platform));
-    const demo = generateFullIntelligenceDataset();
-    // Exclude synthetic reddit data — Reddit is sourced live from Devvit
-    const missingPlatformPosts = demo.filter((p) => !covered.has(p.platform) && p.platform !== 'reddit');
-    if (missingPlatformPosts.length > 0) {
-      return normalise([...(frozen as SocialPost[]), ...missingPlatformPosts]);
-    }
+    // The snapshot is returned AS CAPTURED.
+    //
+    // PR #4 topped it up with `generateFullIntelligenceDataset()` for any
+    // platform the snapshot did not cover, to make every tab look populated.
+    // That injected 16 synthetic X and Facebook posts carrying invented
+    // engagement (373, 746, 900 likes) into a dashboard whose own copy reads
+    // "Verified multi-platform social captures" and "100% VERIFIED". An empty
+    // platform tab is the truth; a full one built from the demo generator is
+    // the single most damaging thing a judge could find.
     return frozen as SocialPost[];
   }
-  return generateFullIntelligenceDataset().filter((p) => p.platform !== 'reddit');
+  // Only reached when no snapshot exists at all -- a developer checkout before
+  // `npm run freeze`. Everything it returns is clearly synthetic.
+  return generateFullIntelligenceDataset();
 }
 
+/**
+ * DISABLED. Kept for reference, not called.
+ *
+ * PR #4 ran this from getAllPosts(), so merely READING the store fired a live
+ * Reddit fetch. That makes the demo network-dependent -- the whole point of the
+ * frozen snapshot is that it renders with no wi-fi, no API and no quota -- and
+ * it fires on every cold start, straight into Reddit's 429 throttle. Ingest
+ * Reddit explicitly through /api/ingest instead, where the result is visible
+ * and the failure is reportable.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 let _redditLiveSeeded = false;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function seedLiveRedditOnce(): Promise<void> {
   if (_redditLiveSeeded) return;
   _redditLiveSeeded = true;
@@ -177,7 +193,6 @@ export async function getAllPosts(): Promise<SocialPost[]> {
     }
   }
   await enrichBaselineOnce();
-  await seedLiveRedditOnce();
   return cache();
 }
 

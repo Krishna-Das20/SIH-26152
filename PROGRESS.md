@@ -495,6 +495,49 @@ demoing this page.**
 
 ---
 
+## 17. UI review 2026-08-28 — four fixes after walking the pages
+
+Ran the app and clicked through all eight routes. All render, the platform
+ribbon holds its counts across tabs, and `/audience` is exemplary — 92% Unknown
+age stated plainly, with a note that unasserted dimensions are never guessed.
+
+Four things were wrong.
+
+**1. "NTRO CERTIFIED" in the masthead.** NTRO has certified nothing. That string
+sat at the top of the dashboard we are showing to NTRO. Now reads
+`SIH 2026 · PS SIH26152 (NTRO)`, which is what is actually true.
+
+**2. Synthetic posts in the live corpus.** PR #4 changed `baseline()` to top up
+the frozen snapshot with `generateFullIntelligenceDataset()` for any platform
+the snapshot did not cover — so every tab looked populated. That injected 16
+fake X and Facebook posts carrying invented engagement (373, 746, 900 likes)
+under a card reading "Verified multi-platform social captures". The snapshot is
+now returned as captured. **An empty platform tab is the truth.**
+
+**3. The store fetched Reddit on read.** `getAllPosts()` called
+`seedLiveRedditOnce()`, so merely reading the store hit the network — defeating
+the point of the frozen snapshot and firing into Reddit's 429 on every cold
+start. Disabled; ingest Reddit explicitly through `/api/ingest`.
+
+**4. Dates rendered without a year.** The corpus spans 2021–2026, and the
+narrative trajectory showed "Apr 22 → Mar 24 → Mar 9". The DATA was correctly
+chronological — those are 2024, 2025, 2026 — but the display made a correct
+timeline look scrambled, which is exactly what a judge would pounce on. Year
+added in the evolution map, the dossier and the platform feed.
+
+Also softened two unsupported claims: "100% Verified" on the entities card
+(nothing verifies them — now "Distinct authors") and "Verified social signals,
+authentic comments" in the feed header.
+
+### Not a problem, checked
+
+YouTube's "DAILY QUOTA REMAINING 10,000" is a LOCAL tally of this app's own
+spend against Google's documented 10,000/day, not a claim about Google's
+counter. It resets when the process restarts and does not see usage from other
+tools, so treat it as a floor, not a reading.
+
+---
+
 ## 16. PR #4 — merged 2026-08-28, with four things rejected
 
 @Rishiraj-De's "Fixed Narrative and Demographics Section". Brings a UI
