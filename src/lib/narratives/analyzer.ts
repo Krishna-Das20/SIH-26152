@@ -91,16 +91,28 @@ export async function analyzeNarratives(
     return emptyResponse(posts.length, availablePlatforms, 0, options, sentimentCoverage, emotionCoverage);
   }
 
-  // 1. Generate embeddings
-  const embeddingItems = posts
+  // 1. Select representative candidate posts for narrative seed clustering (top engaged & recent)
+  const candidatePosts =
+    posts.length > 600
+      ? [...posts]
+          .sort(
+            (a, b) =>
+              (b.likes ?? 0) + (b.replies ?? 0) - ((a.likes ?? 0) + (a.replies ?? 0)) ||
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          )
+          .slice(0, 600)
+      : posts;
+
+  // Generate embeddings for candidate posts
+  const embeddingItems = candidatePosts
     .filter((p) => p.content && p.content.trim().length > 0)
     .map((p) => ({ id: p.id, text: p.content }));
 
   const embeddingMap = await generateEmbeddings(embeddingItems);
-  const embeddingCoverage = embeddingMap.size / Math.max(posts.length, 1);
+  const embeddingCoverage = embeddingMap.size / Math.max(candidatePosts.length, 1);
 
   // 2. Prepare clustering input
-  const clusterInput = posts
+  const clusterInput = candidatePosts
     .filter((p) => embeddingMap.has(p.id))
     .map((p) => ({
       id: p.id,
@@ -197,7 +209,7 @@ function buildFullNarrative(
 
   const platforms = [...new Set(chronological.map((p) => p.platform))] as PlatformType[];
   const engagement = chronological.reduce(
-    (sum, p) => sum + p.likes + p.shares + p.replies,
+    (sum, p) => sum + (p.likes ?? 0) + (p.shares ?? 0) + (p.replies ?? 0),
     0
   );
 

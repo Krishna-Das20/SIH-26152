@@ -225,9 +225,9 @@ export interface AnalyzableItem {
   platform?: string;
   timestamp?: string;
   authorId?: string;
-  likes?: number;
-  replies?: number;
-  shares?: number;
+  likes?: number | null;
+  replies?: number | null;
+  shares?: number | null;
 }
 
 /**

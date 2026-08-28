@@ -71,9 +71,19 @@ export interface SocialPost {
   url?: string;
   
   // Interactions / Link Analysis
-  likes: number;
-  shares: number;
-  replies: number;
+  /**
+   * Engagement counts, or null when the SOURCE does not report them.
+   *
+   * Reddit's public Atom feed carries no score or comment count, so a post
+   * read from it genuinely has unknown engagement. Writing 0 there would be a
+   * claim ("this post has zero likes") rather than an absence, and an earlier
+   * connector filled the gap with `Math.floor(Math.random() * 450) + 15` on
+   * 9,717 posts. Null is the honest value; the UI renders it as "n/a", the
+   * same treatment `followerCount` already gets.
+   */
+  likes: number | null;
+  shares: number | null;
+  replies: number | null;
   views?: number;
   
   // Parent/Thread links

@@ -495,6 +495,81 @@ demoing this page.**
 
 ---
 
+## 16. PR #4 — merged 2026-08-28, with four things rejected
+
+@Rishiraj-De's "Fixed Narrative and Demographics Section". Brings a UI
+iteration, Instagram comment extraction, an NLP model trainer, and Reddit
+ingestion. **The PR did not compile on its own branch** (4 TypeScript errors),
+so several fixes below were needed just to build it.
+
+### Taken
+
+- **Instagram comment extraction** (`findCommentEdges`) — pulls real embedded
+  comments out of page JSON. Genuine new capability.
+- **UI iteration** — new logo, refined layout, 30 routes.
+- **NLP/demographics changes** — the null-instead-of-guess discipline survives.
+- **Reddit ingestion**, rewritten (see below). Reddit is now `worksWithoutCredentials`.
+
+### Rejected — do not reintroduce
+
+**1. Fabricated engagement on 9,717 posts.** `devvit.ts` wrote
+`likes: Math.floor(Math.random() * 450) + 15` and a similar expression for
+`replies` on every Reddit post. Those feed KOL ranking, trend growth and the
+amplification dimension. The same function's docstring claimed "100% authentic".
+
+**2. Block evasion.** It rotated at random between two browser User-Agents and
+a fake product string, and the HTML fallback sent `facebookexternalhit/1.1` —
+impersonating Facebook's crawler. Replaced with one honest UA; the HTML
+scraping fallback is gone.
+
+**3. The 13 MB / 10,075-post corpus.** Only 358 of those were ML-scored (3.5%).
+Merging it would have destroyed the "every post carries transformer output"
+claim. Ours (358, 358 ML-scored) was kept.
+
+**4. A false Devvit claim.** `reddit.ts` said data was "sourced through Reddit's
+official Developer Platform (Devvit)". It is not: `devvit/` is a scaffold whose
+Reddit implementation is commented out and which has never been uploaded
+(`devvit list apps` is empty). The real source is the public Atom feed.
+
+### Reddit, as it now works
+
+Reads `reddit.com/r/<sub>/.rss` — public, no credentials, like Telegram.
+
+**Engagement is `null`, not 0.** Atom carries no score or comment count, so
+`likes`/`shares`/`replies` are now `number | null` across the codebase and the
+UI renders "n/a", the same treatment `followerCount` already had. Arithmetic
+consumers skip unknowns rather than coercing them to 0 — averaging an unknown
+as zero would make a source that hides its counts look like one with no
+engagement.
+
+**Reddit throttles this feed hard.** Repeated calls return HTTP 429 within a
+few requests. The connector reports `rate-limited` with a specific note rather
+than a blanket error. **Do not rely on live Reddit during the demo** — ingest
+ahead of time or expect a throttle.
+
+### Two bugs found while verifying
+
+**`cosineSimilarity` had lost its normalisation** — reduced to a bare dot
+product, valid only for unit vectors. But six of its eight callers pass
+CENTROIDS, whose magnitude is < 1. That understated similarity and inflated
+`computeSemanticShift`: two identical clusters reported a non-zero semantic
+shift, and every mutation score inherited the error. Restored to true cosine.
+
+**Entity-decoding ran after tag-stripping** in the feed parser, so `&lt;table&gt;`
+became a live `<table>` in post text only after stripping had finished. Decode
+first, then strip.
+
+### The trainer's accuracy figures are NOT held-out
+
+`ml/train_models.py` prints "Sentiment Model Accuracy/F1: 0.80" and "Stance:
+0.83". It calls `fit(X_train, y)` then `predict(X_train)` — **no train/test
+split**, scored against labels the transformers produced. That is training-set
+self-agreement, not accuracy. The numbers stay inside the model JSON and are
+**not shown in the UI**; keep it that way, and do not put them on a slide.
+§7's "no accuracy evaluation exists" is still the honest position.
+
+---
+
 ## 15. Platform ribbon counts must stay constant
 
 The dashboard's platform ribbon is NAVIGATION — each card states how much data

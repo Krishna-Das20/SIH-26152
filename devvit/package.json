@@ -1,0 +1,17 @@
+{
+  "name": "nexus-intelligence-bridge",
+  "version": "0.0.1",
+  "description": "Devvit live stream integration for NEXUS OSINT",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "deploy": "devvit upload",
+    "playtest": "devvit playtest"
+  },
+  "dependencies": {
+    "@devvit/public-api": "^0.11.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

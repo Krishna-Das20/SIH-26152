@@ -197,7 +197,15 @@ const clusterInput = [
 ];
 const clusters = clusterNarratives(clusterInput, 0.70);
 assert('Two distinct clusters formed', clusters.length === 2);
-assert('Clusters have deterministic stable IDs starting with N', clusters[0].narrativeId.startsWith('N'));
+// The prefix changed from 'N' to 'SKY-' when the product was renamed. What
+// actually matters is that the id is DERIVED from the cluster contents, so the
+// same cluster always resolves to the same id across runs and processes --
+// assert that property rather than the branding.
+assert('Cluster IDs carry the SKY- prefix', clusters[0].narrativeId.startsWith('SKY-'));
+assert(
+  'Cluster IDs are deterministic across runs',
+  clusterNarratives(clusterInput, 0.70)[0].narrativeId === clusters[0].narrativeId
+);
 
 // ── 2. Semantic Shift ─────────────────────────────────────────────────────
 console.log('\n── 2. Semantic Shift ──');

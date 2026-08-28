@@ -99,59 +99,61 @@ export default function NarrativesPage() {
       />
 
       <main className="px-8 py-6 max-w-7xl">
-        {/* Filters & Actions Bar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-skynet-border">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono uppercase text-skynet-muted flex items-center gap-1.5 mr-2">
-              <Filter className="w-3.5 h-3.5" /> Time Window:
-            </span>
-            {(['all', '24h', '7d', '30d'] as TimeWindowFilter[]).map((w) => (
-              <button
-                key={w}
-                onClick={() => setTimeWindow(w)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-mono uppercase transition-all ${
-                  timeWindow === w
-                    ? 'bg-skynet-surface-secondary text-skynet-text-primary border border-skynet-accent shadow-sm'
-                    : 'bg-skynet-surface text-skynet-muted border border-skynet-border hover:text-skynet-text-primary'
-                }`}
-              >
-                {w}
-              </button>
-            ))}
+        {/* Liquid Glass Filters & Actions Bar */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+          <div className="flex items-center gap-3">
+            <div className="inline-flex items-center p-1 rounded-2xl liquid-glass-dock shadow-2xl">
+              <span className="text-[10px] font-mono uppercase text-neutral-400 font-bold px-3 py-1 flex items-center gap-1.5 border-r border-white/10">
+                <Filter className="w-3 h-3 text-cyan-400" /> Window
+              </span>
+              {(['all', '24h', '7d', '30d'] as TimeWindowFilter[]).map((w) => {
+                const isSelected = timeWindow === w;
+                return (
+                  <button
+                    key={w}
+                    onClick={() => setTimeWindow(w)}
+                    className={`px-3 py-1 rounded-xl text-xs font-mono font-bold uppercase transition-all duration-200 active:scale-95 ${
+                      isSelected
+                        ? 'liquid-glass-active text-white'
+                        : 'text-neutral-400 hover:text-white hover:bg-white/[0.06]'
+                    }`}
+                  >
+                    {w}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsCompareOpen(true)}
               disabled={narratives.length < 2}
-              className="px-3 py-1.5 rounded-lg bg-skynet-surface-secondary text-skynet-text-primary border border-skynet-border hover:border-skynet-accent text-xs font-medium flex items-center gap-2 transition-all disabled:opacity-40"
+              className="px-4 py-2 rounded-2xl liquid-glass-btn text-xs font-bold flex items-center gap-2 transition-all disabled:opacity-30 disabled:pointer-events-none active:scale-95 shadow-lg"
             >
-              <GitCompare className="w-3.5 h-3.5 text-skynet-accent" />
+              <GitCompare className="w-3.5 h-3.5 text-cyan-400" />
               <span>Compare Narratives</span>
             </button>
           </div>
         </div>
 
-        {/* Loading */}
+        {/* Silky Loading Skeleton */}
         {loading && (
-          <div className="flex items-center justify-center py-24">
-            <div className="text-center">
-              <Activity className="w-8 h-8 text-skynet-accent animate-pulse mx-auto mb-3" />
-              <p className="text-skynet-text-primary text-sm font-medium">
-                Executing Narrative Intelligence Pipeline…
-              </p>
-              <p className="text-skynet-muted text-xs mt-1">
-                Encoding semantic vectors and calculating 8-dimension mutation metrics.
-              </p>
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-28 rounded-2xl cred-card shimmer-skeleton border border-white/5" />
+              ))}
             </div>
+            <div className="h-96 rounded-2xl cred-card shimmer-skeleton border border-white/5" />
           </div>
         )}
 
         {/* Error */}
         {error && !loading && (
-          <div className="skynet-surface rounded-xl p-6 border-skynet-warning/40 mb-8">
-            <p className="text-skynet-warning text-sm font-semibold">Narrative Analysis Unavailable</p>
-            <p className="text-skynet-text-secondary text-xs mt-1 leading-relaxed">{error}</p>
+          <div className="cred-card rounded-2xl p-6 border-red-500/30 mb-8 bg-red-950/10">
+            <p className="text-red-400 text-sm font-semibold">Narrative Analysis Notice</p>
+            <p className="text-neutral-300 text-xs mt-1 leading-relaxed">{error}</p>
           </div>
         )}
 
@@ -179,14 +181,14 @@ export default function NarrativesPage() {
 
             {/* Empty State */}
             {narratives.length === 0 && (
-              <div className="skynet-surface rounded-xl p-12 text-center border border-skynet-border">
-                <TrendingUp className="w-8 h-8 text-skynet-muted mx-auto mb-3" strokeWidth={1} />
+              <div className="nexus-surface rounded-xl p-12 text-center border border-nexus-border">
+                <TrendingUp className="w-8 h-8 text-nexus-muted mx-auto mb-3" strokeWidth={1} />
                 {data.coverage.embeddings === 0 ? (
                   <>
-                    <p className="text-skynet-text-primary text-sm font-medium mb-1">
+                    <p className="text-nexus-text-primary text-sm font-medium mb-1">
                       Narrative Detection Offline
                     </p>
-                    <p className="text-skynet-muted text-xs max-w-md mx-auto">
+                    <p className="text-nexus-muted text-xs max-w-md mx-auto">
                       Clustering requires dense sentence embeddings from the Python ML service.
                       Start the service on port 8000 (<code>uvicorn main:app --port 8000</code> in{' '}
                       <code>ml/</code>) and refresh.
@@ -194,8 +196,8 @@ export default function NarrativesPage() {
                   </>
                 ) : (
                   <>
-                    <p className="text-skynet-text-secondary text-sm mb-1">No Narratives Formed</p>
-                    <p className="text-skynet-muted text-xs">
+                    <p className="text-nexus-text-secondary text-sm mb-1">No Narratives Formed</p>
+                    <p className="text-nexus-muted text-xs">
                       All posts were encoded, but none exhibited semantic similarity above the{' '}
                       {data.method.similarityThreshold} threshold.
                     </p>
@@ -233,28 +235,28 @@ export default function NarrativesPage() {
                 return (
                   <div
                     key={n.id}
-                    className={`skynet-surface rounded-2xl p-6 border transition-all ${
+                    className={`cred-card cred-card-hover rounded-2xl p-6 border transition-all duration-300 ${
                       isSelectedHero
-                        ? 'border-skynet-accent/60 bg-skynet-surface'
-                        : 'border-skynet-border hover:border-skynet-border/90'
+                        ? 'border-cyan-400/50 shadow-[0_0_30px_rgba(0,240,255,0.15)] ring-1 ring-cyan-400/30'
+                        : 'border-white/[0.08] hover:border-white/20'
                     }`}
                   >
                     {/* Top row */}
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="flex-1">
-                        <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                          <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-skynet-surface-secondary text-skynet-accent border border-skynet-border">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <span className="liquid-glass-badge text-[10px] font-mono uppercase px-2.5 py-0.5 rounded-full text-cyan-400 border border-cyan-400/30">
                             {n.id}
                           </span>
-                          <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-skynet-surface-secondary text-skynet-text-secondary border border-skynet-border capitalize">
+                          <span className="text-[10px] uppercase font-mono px-2.5 py-0.5 rounded-full bg-white/5 text-neutral-300 border border-white/10 capitalize font-semibold">
                             State: {n.state}
                           </span>
                           {n.confidence && (
                             <span
-                              className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
+                              className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
                                 n.confidence.level === 'HIGH'
-                                  ? 'bg-skynet-positive/10 text-skynet-positive'
-                                  : 'bg-skynet-warning/10 text-skynet-warning'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                  : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
                               }`}
                             >
                               {n.confidence.level} CONFIDENCE
@@ -262,11 +264,11 @@ export default function NarrativesPage() {
                           )}
                         </div>
 
-                        <h3 className="text-base font-bold text-skynet-text-primary">
+                        <h3 className="text-base font-extrabold text-white tracking-tight">
                           {n.title}
                         </h3>
 
-                        <div className="flex flex-wrap items-center gap-3 text-[11px] text-skynet-muted mt-1.5">
+                        <div className="flex flex-wrap items-center gap-3 text-[11px] text-neutral-400 mt-2 font-medium">
                           <span>{n.postCount} posts observed</span>
                           <span>·</span>
                           <span>Platforms: {n.platforms.join(', ')}</span>
@@ -278,16 +280,16 @@ export default function NarrativesPage() {
                       {/* Score badges & Controls */}
                       <div className="flex items-center gap-4 flex-shrink-0">
                         <div className="text-right">
-                          <p className="text-[10px] text-skynet-muted uppercase font-mono">
+                          <p className="text-[10px] text-neutral-400 uppercase font-mono tracking-wider font-bold">
                             Mutation Score
                           </p>
                           <p
-                            className={`text-xl font-bold skynet-metric ${
+                            className={`text-2xl font-black font-display ${
                               (n.mutationScore ?? 0) >= 50
-                                ? 'text-skynet-negative'
+                                ? 'text-rose-400'
                                 : (n.mutationScore ?? 0) >= 25
-                                ? 'text-skynet-warning'
-                                : 'text-skynet-positive'
+                                ? 'text-amber-400'
+                                : 'text-emerald-400'
                             }`}
                           >
                             {n.mutationScore !== null ? `${n.mutationScore}%` : 'N/A'}
@@ -296,10 +298,10 @@ export default function NarrativesPage() {
 
                         <button
                           onClick={() => setHeroNarrativeId(n.id)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 active:scale-95 ${
                             isSelectedHero
-                              ? 'bg-skynet-accent/20 text-skynet-accent border-skynet-accent/50'
-                              : 'bg-skynet-surface-secondary text-skynet-text-secondary border-skynet-border hover:text-skynet-text-primary'
+                              ? 'liquid-glass-active text-white border-cyan-400/50 shadow-md'
+                              : 'bg-white/5 text-neutral-300 border border-white/10 hover:border-white/30 hover:text-white'
                           }`}
                         >
                           {isSelectedHero ? 'Active Hero Map' : 'Set as Hero'}
@@ -307,67 +309,67 @@ export default function NarrativesPage() {
 
                         <button
                           onClick={() => setExpandedId(isExpanded ? null : n.id)}
-                          className="p-1.5 rounded-lg bg-skynet-surface-secondary text-skynet-muted hover:text-skynet-text-primary border border-skynet-border"
+                          className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white border border-white/10 transition-all duration-200 active:scale-95"
                         >
-                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          {isExpanded ? <ChevronUp className="w-4 h-4 text-cyan-400" /> : <ChevronDown className="w-4 h-4" />}
                         </button>
                       </div>
                     </div>
 
                     {/* 8-Dimension Shift Gauges (Always Visible) */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2 pt-5 mt-5 border-t border-skynet-border">
-                      <div className="p-2.5 rounded-lg bg-skynet-surface-secondary/40 border border-skynet-border/60 text-center">
-                        <span className="text-[9px] font-mono uppercase text-skynet-muted block">Semantic</span>
-                        <span className="text-xs font-bold text-skynet-text-primary skynet-metric">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2 pt-5 mt-5 border-t border-nexus-border">
+                      <div className="p-2.5 rounded-lg bg-nexus-surface-secondary/40 border border-nexus-border/60 text-center">
+                        <span className="text-[9px] font-mono uppercase text-nexus-muted block">Semantic</span>
+                        <span className="text-xs font-bold text-nexus-text-primary nexus-metric">
                           {n.semanticShift !== null ? `${n.semanticShift}%` : '—'}
                         </span>
                       </div>
 
-                      <div className="p-2.5 rounded-lg bg-skynet-surface-secondary/40 border border-skynet-border/60 text-center">
-                        <span className="text-[9px] font-mono uppercase text-skynet-muted block">Sentiment</span>
-                        <span className="text-xs font-bold text-skynet-text-primary skynet-metric">
+                      <div className="p-2.5 rounded-lg bg-nexus-surface-secondary/40 border border-nexus-border/60 text-center">
+                        <span className="text-[9px] font-mono uppercase text-nexus-muted block">Sentiment</span>
+                        <span className="text-xs font-bold text-nexus-text-primary nexus-metric">
                           {n.sentimentShift !== null ? `${n.sentimentShift}%` : '—'}
                         </span>
                       </div>
 
-                      <div className="p-2.5 rounded-lg bg-skynet-surface-secondary/40 border border-skynet-border/60 text-center">
-                        <span className="text-[9px] font-mono uppercase text-skynet-muted block">Emotion</span>
-                        <span className="text-xs font-bold text-skynet-text-primary skynet-metric">
+                      <div className="p-2.5 rounded-lg bg-nexus-surface-secondary/40 border border-nexus-border/60 text-center">
+                        <span className="text-[9px] font-mono uppercase text-nexus-muted block">Emotion</span>
+                        <span className="text-xs font-bold text-nexus-text-primary nexus-metric">
                           {n.emotionShift !== null ? `${n.emotionShift}%` : '—'}
                         </span>
                       </div>
 
-                      <div className="p-2.5 rounded-lg bg-skynet-surface-secondary/40 border border-skynet-border/60 text-center">
-                        <span className="text-[9px] font-mono uppercase text-skynet-muted block">Keyword</span>
-                        <span className="text-xs font-bold text-skynet-text-primary skynet-metric">
+                      <div className="p-2.5 rounded-lg bg-nexus-surface-secondary/40 border border-nexus-border/60 text-center">
+                        <span className="text-[9px] font-mono uppercase text-nexus-muted block">Keyword</span>
+                        <span className="text-xs font-bold text-nexus-text-primary nexus-metric">
                           {n.keywordShift !== null ? `${n.keywordShift}%` : '—'}
                         </span>
                       </div>
 
-                      <div className="p-2.5 rounded-lg bg-skynet-surface-secondary/40 border border-skynet-border/60 text-center">
-                        <span className="text-[9px] font-mono uppercase text-skynet-muted block">Entity</span>
-                        <span className="text-xs font-bold text-skynet-text-primary skynet-metric">
+                      <div className="p-2.5 rounded-lg bg-nexus-surface-secondary/40 border border-nexus-border/60 text-center">
+                        <span className="text-[9px] font-mono uppercase text-nexus-muted block">Entity</span>
+                        <span className="text-xs font-bold text-nexus-text-primary nexus-metric">
                           {n.entityShift !== null ? `${n.entityShift}%` : '—'}
                         </span>
                       </div>
 
-                      <div className="p-2.5 rounded-lg bg-skynet-surface-secondary/40 border border-skynet-border/60 text-center">
-                        <span className="text-[9px] font-mono uppercase text-skynet-muted block">Platform</span>
-                        <span className="text-xs font-bold text-skynet-text-primary skynet-metric">
+                      <div className="p-2.5 rounded-lg bg-nexus-surface-secondary/40 border border-nexus-border/60 text-center">
+                        <span className="text-[9px] font-mono uppercase text-nexus-muted block">Platform</span>
+                        <span className="text-xs font-bold text-nexus-text-primary nexus-metric">
                           {n.platformShift !== null ? `${n.platformShift}%` : '—'}
                         </span>
                       </div>
 
-                      <div className="p-2.5 rounded-lg bg-skynet-surface-secondary/40 border border-skynet-border/60 text-center">
-                        <span className="text-[9px] font-mono uppercase text-skynet-muted block">Community</span>
-                        <span className="text-xs font-bold text-skynet-text-primary skynet-metric">
+                      <div className="p-2.5 rounded-lg bg-nexus-surface-secondary/40 border border-nexus-border/60 text-center">
+                        <span className="text-[9px] font-mono uppercase text-nexus-muted block">Community</span>
+                        <span className="text-xs font-bold text-nexus-text-primary nexus-metric">
                           {n.communityShift !== null ? `${n.communityShift}%` : '—'}
                         </span>
                       </div>
 
-                      <div className="p-2.5 rounded-lg bg-skynet-surface-secondary/40 border border-skynet-border/60 text-center">
-                        <span className="text-[9px] font-mono uppercase text-skynet-muted block">Amplification</span>
-                        <span className="text-xs font-bold text-skynet-text-primary skynet-metric">
+                      <div className="p-2.5 rounded-lg bg-nexus-surface-secondary/40 border border-nexus-border/60 text-center">
+                        <span className="text-[9px] font-mono uppercase text-nexus-muted block">Amplification</span>
+                        <span className="text-xs font-bold text-nexus-text-primary nexus-metric">
                           {n.amplificationShift !== null ? `${n.amplificationShift}%` : '—'}
                         </span>
                       </div>
@@ -375,7 +377,7 @@ export default function NarrativesPage() {
 
                     {/* Expanded Detail Workspace */}
                     {isExpanded && (
-                      <div className="pt-6 mt-6 border-t border-skynet-border space-y-6 animate-in fade-in duration-200">
+                      <div className="pt-6 mt-6 border-t border-nexus-border space-y-6 animate-in fade-in duration-200">
                         {/* Evidence Chain & Why Mutated */}
                         <EvidenceChainViewer
                           evidenceChain={n.evidenceChain}
@@ -391,7 +393,7 @@ export default function NarrativesPage() {
                         <div className="pt-2 flex justify-end">
                           <Link
                             href={`/narratives/${n.id}`}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-skynet-accent text-skynet-bg text-xs font-semibold hover:bg-skynet-accent/90 transition-all shadow-md shadow-skynet-accent/10"
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-nexus-accent text-nexus-bg text-xs font-semibold hover:bg-nexus-accent/90 transition-all shadow-md shadow-nexus-accent/10"
                           >
                             <span>Open Dedicated Dossier View</span>
                             <ArrowRight className="w-3.5 h-3.5" />

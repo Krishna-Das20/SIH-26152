@@ -24,7 +24,19 @@ function check(name: string, ok: boolean, detail?: string) {
   console.log(`${ok ? '  PASS' : '  FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
 }
 
-const CREDENTIALED = ['x', 'instagram', 'facebook', 'reddit', 'youtube'] as const;
+/**
+ * Connectors that CANNOT work without credentials.
+ *
+ * Reddit left this list on 2026-08-27: it now reads the public Atom feed at
+ * reddit.com/r/<sub>/.rss, which needs no auth, exactly like Telegram. It is
+ * still covered below by the no-fabrication checks that apply to every
+ * connector -- the point of this list is "must report missing-credentials",
+ * not "must be tested".
+ */
+const CREDENTIALED = ['x', 'instagram', 'facebook', 'youtube'] as const;
+
+/** Connectors that legitimately return real data with no credentials set. */
+const CREDENTIAL_FREE = ['telegram', 'reddit'] as const;
 
 /** Env keys touched by these tests, restored afterwards. */
 const ENV_KEYS = [
@@ -87,6 +99,25 @@ async function main() {
     check(`${platform}: reports missing/unauthorized`, honest, r.status);
     check(`${platform}: returns ZERO posts (nothing fabricated)`, r.posts.length === 0, `${r.posts.length} posts`);
     check(`${platform}: explains what is needed`, Boolean(r.note && r.note.length > 10));
+  }
+
+  // Credential-free connectors may return posts here -- but never invented
+  // engagement. A previous Reddit connector filled likes/replies with
+  // Math.random() on every post it produced.
+  for (const platform of CREDENTIAL_FREE) {
+    const c = getConnector(platform)!;
+    const r = await c.fetch(platform === 'reddit' ? 'technology' : 'durov', 5);
+    check(`${platform}: works without credentials`, r.status === 'ok' || r.posts.length === 0, r.status);
+    const fabricated = r.posts.filter(
+      (p) => typeof p.likes === 'number' && p.likes > 0 && typeof p.replies === 'number' && p.replies > 0
+    );
+    if (platform === 'reddit') {
+      check(
+        'reddit: engagement is null, not invented (Atom carries no score)',
+        r.posts.every((p) => p.likes === null && p.replies === null),
+        `${fabricated.length} of ${r.posts.length} posts carry engagement numbers`
+      );
+    }
   }
 
   // ── 4. Dummy credentials => the connector really calls the provider ─────

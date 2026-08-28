@@ -328,8 +328,20 @@ export function computeAmplificationShift(
 ): number | null {
   if (earlyPosts.length === 0 || latePosts.length === 0) return null;
 
-  const earlyEngage = earlyPosts.reduce((s, p) => s + p.likes + p.shares + p.replies, 0) / earlyPosts.length;
-  const lateEngage = latePosts.reduce((s, p) => s + p.likes + p.shares + p.replies, 0) / latePosts.length;
+  // Average over the posts that actually REPORT engagement. Treating an
+  // unknown as 0 would drag the mean toward zero and make a source that hides
+  // its counts look like a source with no engagement.
+  const engagement = (p: SocialPost): number | null =>
+    p.likes === null && p.shares === null && p.replies === null
+      ? null
+      : (p.likes ?? 0) + (p.shares ?? 0) + (p.replies ?? 0);
+
+  const earlyVals = earlyPosts.map(engagement).filter((v): v is number => v !== null);
+  const lateVals = latePosts.map(engagement).filter((v): v is number => v !== null);
+  if (earlyVals.length === 0 || lateVals.length === 0) return null;
+
+  const earlyEngage = earlyVals.reduce((s, v) => s + v, 0) / earlyVals.length;
+  const lateEngage = lateVals.reduce((s, v) => s + v, 0) / lateVals.length;
 
   const earlyKOLs = earlyPosts.filter((p) => p.author.isKOL || (p.author.betweennessScore && p.author.betweennessScore > 0)).length;
   const lateKOLs = latePosts.filter((p) => p.author.isKOL || (p.author.betweennessScore && p.author.betweennessScore > 0)).length;

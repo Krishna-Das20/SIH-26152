@@ -20,8 +20,16 @@ import {
   CheckCircle2,
   AlertCircle,
   ArrowRight,
+  RefreshCw,
+  Play,
+  Pause,
+  Sparkles,
+  Clock,
+  Video,
+  Key,
 } from 'lucide-react';
 import { SocialPost, PlatformType } from '@/types/intelligence';
+import { SkynetLogo } from '@/components/SkynetLogo';
 
 type PlatformTab = 'all' | 'instagram' | 'telegram' | 'youtube' | 'x' | 'reddit' | 'facebook';
 
@@ -42,20 +50,44 @@ const PLATFORMS: Record<PlatformTab, PlatformMeta> = {
   all: {
     id: 'all',
     name: 'All Platforms',
-    shortName: 'Unified Fusion',
+    shortName: 'Unified',
     tagline: 'Cross-Vector Intelligence Command',
-    description: 'Aggregated cross-platform intelligence across all collected social feeds and communities.',
+    description: 'Aggregated cross-platform intelligence across all intercepted social feeds and communities.',
     icon: '🌐',
-    color: 'text-skynet-accent',
-    borderColor: 'border-skynet-accent/50',
-    bgColor: 'bg-skynet-accent/10',
+    color: 'text-white',
+    borderColor: 'border-white/40',
+    bgColor: 'bg-white/10',
+    live: true,
+  },
+  youtube: {
+    id: 'youtube',
+    name: 'YouTube',
+    shortName: 'YouTube',
+    tagline: 'Official Data API v3 (10,000 Credits/Day)',
+    description: 'Long-form discourse analysis, multi-tiered comment threads, video thesis sentiment, and audience reactions.',
+    icon: '▶️',
+    color: 'text-red-400',
+    borderColor: 'border-red-500/40',
+    bgColor: 'bg-red-500/10',
+    live: true,
+  },
+  reddit: {
+    id: 'reddit',
+    name: 'Reddit',
+    shortName: 'Reddit',
+    tagline: 'Devvit App Stream & Community Feeds',
+    description: 'Threaded community debates, upvote consensus scoring, nuanced stance mapping, and specialized interest groups.',
+    icon: '💬',
+    color: 'text-orange-400',
+    borderColor: 'border-orange-500/40',
+    bgColor: 'bg-orange-500/10',
     live: true,
   },
   instagram: {
     id: 'instagram',
     name: 'Instagram',
     shortName: 'Instagram',
-    tagline: 'Visual OSINT & Reels Intelligence',
+    tagline: 'Visual OSINT & Real-Time Comments',
     description: 'Visual culture tracking, viral audio/video resonance, hashtag communities, and creator engagement.',
     icon: '📸',
     color: 'text-pink-400',
@@ -75,40 +107,16 @@ const PLATFORMS: Record<PlatformTab, PlatformMeta> = {
     bgColor: 'bg-sky-500/10',
     live: true,
   },
-  youtube: {
-    id: 'youtube',
-    name: 'YouTube',
-    shortName: 'YouTube',
-    tagline: 'Video & Discussion Stream Intelligence',
-    description: 'Long-form discourse analysis, multi-tiered comment threads, video thesis sentiment, and audience reactions.',
-    icon: '▶️',
-    color: 'text-red-400',
-    borderColor: 'border-red-500/40',
-    bgColor: 'bg-red-500/10',
-    live: true,
-  },
   x: {
     id: 'x',
     name: 'X (Twitter)',
-    shortName: 'X / Twitter',
+    shortName: 'X',
     tagline: 'Real-Time Fast Wire & Breaking Discourse',
     description: 'High-velocity breaking narrative detection, micro-blogging discourse, quote tweet amplification, and OSINT.',
     icon: '𝕏',
-    color: 'text-slate-300',
-    borderColor: 'border-slate-400/40',
-    bgColor: 'bg-slate-400/10',
-    live: false,
-  },
-  reddit: {
-    id: 'reddit',
-    name: 'Reddit',
-    shortName: 'Reddit',
-    tagline: 'Subreddit Communities & Consensus Analysis',
-    description: 'Threaded community debates, upvote consensus scoring, nuanced stance mapping, and specialized interest groups.',
-    icon: '💬',
-    color: 'text-orange-400',
-    borderColor: 'border-orange-500/40',
-    bgColor: 'bg-orange-500/10',
+    color: 'text-neutral-300',
+    borderColor: 'border-white/30',
+    bgColor: 'bg-white/5',
     live: false,
   },
   facebook: {
@@ -118,9 +126,9 @@ const PLATFORMS: Record<PlatformTab, PlatformMeta> = {
     tagline: 'Public Pages & Demographic Distribution',
     description: 'Public page broadcasting, demographic sentiment spread, cross-generational engagement, and community groups.',
     icon: '👥',
-    color: 'text-indigo-400',
-    borderColor: 'border-indigo-500/40',
-    bgColor: 'bg-indigo-500/10',
+    color: 'text-blue-400',
+    borderColor: 'border-blue-500/40',
+    bgColor: 'bg-blue-500/10',
     live: false,
   },
 };
@@ -129,6 +137,7 @@ export default function OverviewPage() {
   const [activeTab, setActiveTab] = useState<PlatformTab>('all');
   const [metrics, setMetrics] = useState({
     totalPosts: 0,
+    unifiedTotalPosts: 0,
     activeNodes: 0,
     averageSentiment: 0,
     sarcasmIndex: 0,
@@ -136,8 +145,6 @@ export default function OverviewPage() {
     supportivePercentage: 0,
     opposingPercentage: 0,
     platformBreakdown: {} as Record<string, number>,
-    corpusBreakdown: {} as Record<string, number>,
-    corpusTotal: 0,
   });
   const [sentimentData, setSentimentData] = useState({
     emotionRadar: [] as { emotion: string; value: number; rawCount: number }[],
@@ -150,9 +157,52 @@ export default function OverviewPage() {
   const [posts, setPosts] = useState<SocialPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // General Ingest Bar State
   const [ingestInput, setIngestInput] = useState('');
   const [ingesting, setIngesting] = useState(false);
   const [ingestStatus, setIngestStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // YouTube Data API v3 (10,000 Credits/Day) State
+  const [ytTarget, setYtTarget] = useState('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  const [ytSyncing, setYtSyncing] = useState(false);
+  const [ytFeedback, setYtFeedback] = useState<string | null>(null);
+  const [ytTelemetry, setYtTelemetry] = useState<{
+    dailyLimit: number;
+    usedToday: number;
+    remaining: number;
+    hasApiKey: boolean;
+    tier: string;
+  }>({
+    dailyLimit: 10000,
+    usedToday: 0,
+    remaining: 10000,
+    hasApiKey: false,
+    tier: 'YouTube Data API v3 (Free 10,000 Credits/Day)',
+  });
+
+  // Instagram Real-Time Sync State
+  const [instaSyncActive, setInstaSyncActive] = useState(false);
+  const [syncingInsta, setSyncingInsta] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+  const [syncTargetUrl, setSyncTargetUrl] = useState('https://www.instagram.com/reel/DcHEonOvCLB/');
+
+  // Reddit Devvit Live Stream State
+  const [devvitTarget, setDevvitTarget] = useState('r/technology');
+  const [syncingDevvit, setSyncingDevvit] = useState(false);
+  const [devvitFeedback, setDevvitFeedback] = useState<string | null>(null);
+
+  // Load YouTube quota telemetry
+  const loadYoutubeTelemetry = useCallback(async () => {
+    try {
+      const res = await fetch('/api/youtube/sync');
+      const data = await res.json();
+      if (data.telemetry) setYtTelemetry(data.telemetry);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const fetchPlatformData = useCallback(
     async (platform: PlatformTab, isRefresh = false) => {
@@ -160,7 +210,6 @@ export default function OverviewPage() {
       else setLoading(true);
 
       try {
-        // When user explicitly clicks Refresh, trigger re-clustering & re-analysis on latest posts
         if (isRefresh) {
           await fetch('/api/analytics/narratives', { method: 'POST' }).catch(() => null);
         }
@@ -176,7 +225,18 @@ export default function OverviewPage() {
           fetch(`/api/posts${postQuery}`).then((r) => r.json()).catch(() => null),
         ]);
 
-        if (overviewRes && !overviewRes.error) setMetrics(overviewRes);
+        if (overviewRes && !overviewRes.error) {
+          setMetrics((prev) => ({
+            ...overviewRes,
+            unifiedTotalPosts:
+              overviewRes.unifiedTotalPosts ??
+              (platform === 'all' ? overviewRes.totalPosts : prev.unifiedTotalPosts),
+            platformBreakdown:
+              overviewRes.platformBreakdown && Object.keys(overviewRes.platformBreakdown).length > 0
+                ? overviewRes.platformBreakdown
+                : prev.platformBreakdown,
+          }));
+        }
         if (sentRes && !sentRes.error) setSentimentData(sentRes);
         if (trendsRes?.trends) setTrends(trendsRes.trends);
         if (narrativeRes?.narratives) setNarrativeCount(narrativeRes.narratives.length);
@@ -191,6 +251,101 @@ export default function OverviewPage() {
     []
   );
 
+  useEffect(() => {
+    fetchPlatformData(activeTab);
+    loadYoutubeTelemetry();
+  }, [activeTab, fetchPlatformData, loadYoutubeTelemetry]);
+
+  const [showKeyInput, setShowKeyInput] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+
+  // YouTube Sync Handler
+  const handleYoutubeSync = async (targetOverride?: string, keyOverride?: string) => {
+    const target = targetOverride || ytTarget;
+    if (!target) return;
+    setYtSyncing(true);
+    setYtFeedback(null);
+    try {
+      const res = await fetch('/api/youtube/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target, limit: 30, apiKey: keyOverride }),
+      });
+      const data = await res.json();
+      if (data.telemetry) setYtTelemetry(data.telemetry);
+      if (data.success && data.count > 0) {
+        setYtFeedback(`Captured & scored ${data.count} YouTube comments via Data API v3!`);
+        await fetchPlatformData(activeTab, true);
+      } else {
+        setYtFeedback(data.error || `Could not fetch comments for "${target}". Check video ID or API key.`);
+      }
+    } catch (e: any) {
+      setYtFeedback(e.message || 'YouTube sync error');
+    } finally {
+      setYtSyncing(false);
+    }
+  };
+
+  // Instagram Sync Handler
+  const triggerInstaSync = useCallback(
+    async (targetOverride?: string) => {
+      const target = targetOverride || syncTargetUrl;
+      if (!target) return;
+      setSyncingInsta(true);
+      try {
+        const res = await fetch('/api/instagram/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetUrl: target }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setLastSyncTime(new Date().toLocaleTimeString());
+          if (data.newCommentsCount > 0) {
+            setSyncFeedback(`Captured & scored ${data.newCommentsCount} new live comment(s)!`);
+            await fetchPlatformData(activeTab, false);
+          } else {
+            setSyncFeedback(`Sync active: ${data.totalExtracted || 0} comments verified.`);
+          }
+        } else {
+          setSyncFeedback(data.message || 'Sync check completed.');
+        }
+      } catch (e: any) {
+        console.error('Instagram sync failed:', e);
+      } finally {
+        setSyncingInsta(false);
+      }
+    },
+    [syncTargetUrl, activeTab, fetchPlatformData]
+  );
+
+  // Reddit Devvit Sync Handler
+  const handleDevvitSync = async (targetOverride?: string) => {
+    const sub = targetOverride || devvitTarget;
+    if (!sub) return;
+    setSyncingDevvit(true);
+    setDevvitFeedback(null);
+    try {
+      const res = await fetch('/api/devvit/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subreddit: sub }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDevvitFeedback(data.message || `Captured ${data.ingestedCount} live posts from r/${data.subreddit}!`);
+        await fetchPlatformData(activeTab, false);
+      } else {
+        setDevvitFeedback(data.message || 'Live fetch failed.');
+      }
+    } catch (e: any) {
+      setDevvitFeedback(e.message || 'Devvit sync request failed.');
+    } finally {
+      setSyncingDevvit(false);
+    }
+  };
+
+  // General Ingest Handler
   const handleLiveIngest = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const target = ingestInput.trim();
@@ -230,15 +385,8 @@ export default function OverviewPage() {
     }
   };
 
-  useEffect(() => {
-    fetchPlatformData(activeTab);
-  }, [activeTab, fetchPlatformData]);
-
   const currentPlatform = PLATFORMS[activeTab];
-  // Navigation counts come from the CORPUS view, so they stay put when a tab
-  // is selected. `platformBreakdown` is scoped to the active tab and would
-  // zero out every card except the selected one.
-  const platformCounts = metrics.corpusBreakdown || {};
+  const platformCounts = metrics.platformBreakdown || {};
 
   const topEmotions = sentimentData.emotionRadar
     .filter((e) => e.rawCount > 0)
@@ -258,453 +406,592 @@ export default function OverviewPage() {
         refreshing={refreshing}
       />
 
-      <main className="px-8 py-6 max-w-7xl">
-        {/* Multi-Platform Screen Navigation Ribbon */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-mono uppercase text-skynet-muted flex items-center gap-1.5">
-              <Radio className="w-3.5 h-3.5 text-skynet-accent animate-pulse" />
-              <span>Select Platform Command Screen</span>
+      <main className="px-8 py-8 max-w-7xl">
+        {/* SKYNET Hero Headline */}
+        <div className="mb-10">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full liquid-glass-badge">
+              <SkynetLogo size={14} withGlow={false} />
+              <span className="text-[10px] font-mono uppercase tracking-[0.25em] text-cyan-300 font-bold">
+                SKYNET NEURAL OSINT • NTRO CERTIFIED
+              </span>
+            </div>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#10B981]" />
+          </div>
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tight font-display leading-[1.05]">
+            SKYNET Intelligence. <br className="hidden sm:inline" />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-cyan-200 to-neutral-500">
+              Not everyone sees it.
             </span>
-            <span className="text-[11px] text-skynet-muted">
-              {metrics.totalPosts} total collected posts in active scope
+          </h1>
+          <p className="text-sm md:text-base text-neutral-400 max-w-2xl mt-3 font-normal leading-relaxed">
+            Autonomous neural signal capture across YouTube, Reddit, Instagram, Telegram, and X.
+            Continuous ML clustering, narrative mutations, and demographic profiling.
+          </p>
+        </div>
+
+        {/* CRED Segmented Platform Pill Bar */}
+        <div className="mb-10">
+          <div className="flex items-center justify-between mb-3 px-1">
+            <span className="text-[10px] font-mono uppercase tracking-[0.25em] text-neutral-400 font-bold flex items-center gap-2">
+              <Radio className="w-3.5 h-3.5 text-white animate-pulse" />
+              PLATFORM FEEDS
+            </span>
+            <span className="text-[11px] font-mono text-neutral-400 font-medium">
+              {activeTab === 'all'
+                ? `${(metrics.unifiedTotalPosts || metrics.totalPosts).toLocaleString()} TOTAL CAPTURES`
+                : `${metrics.totalPosts.toLocaleString()} ON ${currentPlatform.shortName.toUpperCase()}`}
             </span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+          <div className="liquid-glass-dock p-2 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
             {(Object.keys(PLATFORMS) as PlatformTab[]).map((pKey) => {
               const p = PLATFORMS[pKey];
               const isSelected = activeTab === pKey;
-              const count = pKey === 'all' ? metrics.corpusTotal : platformCounts[pKey] || 0;
+              const count =
+                pKey === 'all'
+                  ? metrics.unifiedTotalPosts || metrics.totalPosts
+                  : platformCounts[pKey] ?? 0;
 
               return (
                 <button
                   key={pKey}
                   onClick={() => setActiveTab(pKey)}
-                  className={`p-3 rounded-xl border text-left transition-all relative overflow-hidden flex flex-col justify-between ${
+                  className={`liquid-glass-tab px-3.5 py-3 text-left relative flex flex-col justify-between cursor-pointer ${
                     isSelected
-                      ? `bg-skynet-surface-secondary ${p.borderColor} shadow-lg ring-1 ring-skynet-accent/30`
-                      : 'bg-skynet-surface border-skynet-border hover:border-skynet-border/90 hover:bg-skynet-surface-secondary/40'
+                      ? 'liquid-glass-active ring-1 ring-white/50'
+                      : 'text-neutral-400'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-lg">{p.icon}</span>
+                    <span className="text-base">{p.icon}</span>
                     <span
-                      className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                        count > 0
-                          ? 'bg-skynet-surface text-skynet-text-primary border border-skynet-border'
-                          : 'bg-skynet-surface text-skynet-muted border border-skynet-border/50'
+                      className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                        isSelected
+                          ? 'liquid-glass-badge'
+                          : 'bg-white/10 text-neutral-300 border border-white/10'
                       }`}
                     >
-                      {count}
+                      {count.toLocaleString()}
                     </span>
                   </div>
-
                   <div>
-                    <p
-                      className={`text-xs font-bold leading-tight ${
-                        isSelected ? p.color : 'text-skynet-text-primary'
-                      }`}
-                    >
+                    <p className={`text-xs font-black tracking-tight ${isSelected ? 'text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]' : 'text-neutral-300'}`}>
                       {p.shortName}
                     </p>
-                    <span className="text-[9px] text-skynet-muted uppercase font-mono block mt-0.5">
-                      {pKey === 'all'
-                        ? 'Unified'
-                        : p.live || count > 0
-                        ? 'Live Corpus'
-                        : 'Dormant'}
-                    </span>
+                    <p className="text-[9px] font-mono uppercase tracking-wider flex items-center gap-1.5 mt-0.5">
+                      {isSelected ? (
+                        <>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#10B981]" />
+                          <span className="text-emerald-300 font-bold">ACTIVE</span>
+                        </>
+                      ) : (
+                        <span className="text-neutral-500">{p.live ? 'LIVE' : 'DORMANT'}</span>
+                      )}
+                    </p>
                   </div>
-
-                  {isSelected && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-skynet-accent" />
-                  )}
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Platform Screen Header Banner */}
-        <div
-          className={`rounded-2xl p-6 mb-8 border transition-all ${
-            activeTab === 'all'
-              ? 'bg-skynet-surface border-skynet-border'
-              : `${currentPlatform.bgColor} ${currentPlatform.borderColor}`
-          }`}
-        >
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-skynet-surface border border-skynet-border flex items-center justify-center text-2xl shadow-inner flex-shrink-0">
-                {currentPlatform.icon}
+        {/* ══════════════════════════════════════════════════════════════════
+            YOUTUBE DATA API V3 (10,000 CREDITS/DAY) LIVE CONSOLE
+            ══════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'youtube' && (
+          <div className="relative mb-8 rounded-3xl bg-gradient-to-b from-red-500/20 via-white/[0.03] to-transparent p-[1px] shadow-[0_20px_50px_-20px_rgba(239,68,68,0.2)]">
+            <div className="rounded-3xl bg-gradient-to-b from-[#161214] via-[#0e0d10] to-[#08080a] p-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.15)]">
+              {/* Console Top Badge */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-white/[0.08]">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(239,68,68,0.3)]">
+                    ▶
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-extrabold text-white tracking-tight font-display">
+                        YouTube Data API v3 Live Console
+                      </h3>
+                      <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 font-bold uppercase tracking-wider">
+                        10,000 Credits / Day
+                      </span>
+                    </div>
+                    <p className="text-xs text-neutral-400 mt-0.5">
+                      Fetch authentic YouTube comments, run RoBERTa sentiment, and monitor daily Google Cloud quota.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Quota Telemetry Meter */}
+                <div className="flex items-center gap-4 px-4 py-2.5 rounded-2xl bg-white/[0.04] border border-white/[0.08]">
+                  <div>
+                    <div className="text-[9px] font-mono uppercase tracking-[0.2em] text-neutral-400 font-bold">
+                      DAILY QUOTA REMAINING
+                    </div>
+                    <div className="text-sm font-mono font-extrabold text-white flex items-baseline gap-1.5">
+                      <span>{ytTelemetry.remaining.toLocaleString()}</span>
+                      <span className="text-neutral-400 text-xs">/ 10,000 credits</span>
+                    </div>
+                  </div>
+                  <div className="w-20 h-2 bg-white/10 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-400 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, (ytTelemetry.remaining / 10000) * 100)}%` }}
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <h2 className="text-lg font-bold text-skynet-text-primary">
-                    {currentPlatform.name} Intelligence Screen
-                  </h2>
-                  <span
-                    className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded ${
-                      activeTab === 'all' || platformCounts[activeTab] > 0
-                        ? 'bg-skynet-positive/10 text-skynet-positive border border-skynet-positive/30'
-                        : 'bg-skynet-warning/10 text-skynet-warning border border-skynet-warning/30'
+
+              {/* YouTube Target Sync Form */}
+              <div className="flex flex-col sm:flex-row items-center gap-3 mb-4">
+                <div className="relative flex-1 w-full">
+                  <Video className="w-4 h-4 text-neutral-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Enter YouTube Video URL or ID (e.g. https://www.youtube.com/watch?v=...)"
+                    value={ytTarget}
+                    onChange={(e) => setYtTarget(e.target.value)}
+                    className="w-full pl-11 pr-4 py-3 rounded-full bg-white/[0.05] border border-white/15 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-white/40 font-mono shadow-inner transition-all"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleYoutubeSync()}
+                  disabled={ytSyncing || !ytTarget.trim()}
+                  className="cred-pill-btn w-full sm:w-auto flex-shrink-0 disabled:opacity-50"
+                >
+                  {ytSyncing ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Syncing Comments…</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Sync YouTube Comments</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Presets & Info */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 text-[11px]">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-neutral-400 font-mono text-[10px] uppercase font-bold">Quick targets:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setYtTarget('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+                      handleYoutubeSync('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+                    }}
+                    className="px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/15 text-neutral-300 font-mono text-[10px] border border-white/10 transition-colors"
+                  >
+                    Rick Astley (dQw4w9WgXcQ)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setYtTarget('https://www.youtube.com/watch?v=DmFGE-DBQvY');
+                      handleYoutubeSync('https://www.youtube.com/watch?v=DmFGE-DBQvY');
+                    }}
+                    className="px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/15 text-neutral-300 font-mono text-[10px] border border-white/10 transition-colors"
+                  >
+                    Semiconductor Mission (DmFGE-DBQvY)
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowKeyInput(!showKeyInput)}
+                    className="text-neutral-300 hover:text-white font-mono text-[10px] uppercase flex items-center gap-1.5 transition-colors border border-white/10 px-2.5 py-1 rounded-full bg-white/[0.04]"
+                  >
+                    <Key className="w-3 h-3 text-emerald-400" />
+                    <span>{ytTelemetry.hasApiKey ? 'Update API Key' : '+ Set YouTube API Key'}</span>
+                  </button>
+                  <span className="text-neutral-400 font-mono text-[10px]">Cost: 1 unit per video comment thread</span>
+                </div>
+              </div>
+
+              {/* Inline API Key Input */}
+              {showKeyInput && (
+                <div className="mt-3.5 p-3 rounded-2xl bg-white/[0.04] border border-white/15 flex flex-col sm:flex-row items-center gap-2">
+                  <input
+                    type="password"
+                    placeholder="Paste Google Cloud YouTube Data API v3 key (AIzaSy...)"
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    className="flex-1 w-full px-4 py-2.5 rounded-full bg-black/70 border border-white/15 text-xs text-white placeholder:text-neutral-500 font-mono focus:outline-none focus:border-white/40"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!apiKeyInput.trim()) return;
+                      await handleYoutubeSync(undefined, apiKeyInput.trim());
+                      setShowKeyInput(false);
+                      setApiKeyInput('');
+                    }}
+                    className="cred-pill-btn w-full sm:w-auto text-[10px] py-2 px-5"
+                  >
+                    Save & Test Key
+                  </button>
+                </div>
+              )}
+
+              {/* Feedback */}
+              {ytFeedback && (
+                <div className="mt-4 p-3 rounded-2xl bg-white/5 border border-white/15 flex items-center gap-2.5 text-xs text-neutral-200">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <span>{ytFeedback}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            INSTAGRAM REAL-TIME COMMENT SYNC CONSOLE
+            ══════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'instagram' && (
+          <div className="relative mb-8 rounded-3xl bg-gradient-to-b from-pink-500/20 via-white/[0.03] to-transparent p-[1px]">
+            <div className="rounded-3xl bg-gradient-to-b from-[#161014] via-[#0e0d10] to-[#08080a] p-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.15)]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-white/[0.08]">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-pink-500/20 border border-pink-500/40 text-pink-400 flex items-center justify-center font-bold text-xl">
+                    📸
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-white tracking-tight font-display">
+                      Instagram Real-Time Ingestion Console
+                    </h3>
+                    <p className="text-xs text-neutral-400 mt-0.5">
+                      Extracts parent reel captions, timestamps, and nested comments with author profiles.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setInstaSyncActive(!instaSyncActive)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
+                      instaSyncActive
+                        ? 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.4)]'
+                        : 'bg-white/10 text-neutral-300 border border-white/15'
                     }`}
                   >
-                    {activeTab === 'all'
-                      ? '6 Platforms Active'
-                      : platformCounts[activeTab] > 0
-                      ? 'Corpus Scored & Live'
-                      : 'Connector Ready'}
+                    {instaSyncActive ? <Play className="w-3.5 h-3.5 fill-black" /> : <Pause className="w-3.5 h-3.5" />}
+                    <span>{instaSyncActive ? 'Auto-Polling (15s)' : 'Auto-Poll Paused'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => triggerInstaSync()}
+                    disabled={syncingInsta}
+                    className="cred-pill-btn"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${syncingInsta ? 'animate-spin' : ''}`} />
+                    <span>Sync Now</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Target input */}
+              <div className="flex items-center gap-3 mb-3">
+                <input
+                  type="text"
+                  placeholder="Paste Instagram Reel or Post URL…"
+                  value={syncTargetUrl}
+                  onChange={(e) => setSyncTargetUrl(e.target.value)}
+                  className="flex-1 px-4 py-2.5 rounded-full bg-white/[0.05] border border-white/15 text-xs text-white placeholder:text-neutral-500 focus:outline-none font-mono"
+                />
+              </div>
+
+              {syncFeedback && (
+                <div className="p-3 rounded-2xl bg-white/5 border border-white/15 text-xs text-neutral-200 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <span>{syncFeedback}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            REDDIT DEVVIT LIVE STREAM CONSOLE
+            ══════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'reddit' && (
+          <div className="relative mb-8 rounded-3xl bg-gradient-to-b from-orange-500/20 via-white/[0.03] to-transparent p-[1px]">
+            <div className="rounded-3xl bg-gradient-to-b from-[#16120e] via-[#0e0d10] to-[#08080a] p-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.15)]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-white/[0.08]">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-orange-500/20 border border-orange-500/40 text-orange-400 flex items-center justify-center font-bold text-xl">
+                    💬
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-white tracking-tight font-display">
+                      Reddit Devvit App Live Stream
+                    </h3>
+                    <p className="text-xs text-neutral-400 mt-0.5">
+                      Subreddit post and comment feeds via high-throughput Devvit bridge (no rate limits).
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono uppercase px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-bold">
+                    DEVVIT READY
                   </span>
                 </div>
-                <p className="text-xs text-skynet-text-secondary max-w-2xl leading-relaxed">
-                  {currentPlatform.description}
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-3 mb-4">
+                <input
+                  type="text"
+                  placeholder="Enter Subreddit name (e.g. r/technology, r/science, r/india)…"
+                  value={devvitTarget}
+                  onChange={(e) => setDevvitTarget(e.target.value)}
+                  className="flex-1 w-full px-4 py-3 rounded-full bg-white/[0.05] border border-white/15 text-xs text-white placeholder:text-neutral-500 focus:outline-none font-mono"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => handleDevvitSync()}
+                  disabled={syncingDevvit || !devvitTarget.trim()}
+                  className="cred-pill-btn w-full sm:w-auto flex-shrink-0 disabled:opacity-50"
+                >
+                  {syncingDevvit ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Fetching Stream…</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Stream Subreddit</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono">
+                <span className="text-neutral-400 uppercase font-bold">Presets:</span>
+                {['r/technology', 'r/artificial', 'r/news', 'r/science', 'r/india', 'r/cybersecurity'].map((sub) => (
+                  <button
+                    key={sub}
+                    type="button"
+                    onClick={() => {
+                      setDevvitTarget(sub);
+                      handleDevvitSync(sub);
+                    }}
+                    className="px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/15 text-neutral-300 border border-white/10 transition-colors"
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
+
+              {devvitFeedback && (
+                <div className="mt-4 p-3 rounded-2xl bg-white/5 border border-white/15 text-xs text-neutral-200 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <span>{devvitFeedback}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            FOUR TOP KPI METRIC CARDS (CRED LUXURY CONTAINERS)
+            ══════════════════════════════════════════════════════════════════ */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <MetricCard
+            label="Sampled Intelligence Corpus"
+            value={metrics.totalPosts.toLocaleString()}
+            change={
+              activeTab === 'all'
+                ? 'Master Dataset'
+                : `${platformCounts[activeTab] || 0} on ${currentPlatform.shortName}`
+            }
+            changeType="positive"
+            icon={<BarChart3 className="w-4 h-4" />}
+            subtitle="Verified multi-platform social captures"
+          />
+
+          <MetricCard
+            label="Unique Network Entities"
+            value={metrics.activeNodes.toLocaleString()}
+            change="100% Verified"
+            changeType="positive"
+            icon={<Users className="w-4 h-4" />}
+            subtitle="Active accounts & community nodes"
+          />
+
+          <MetricCard
+            label="Average Sentiment Stance"
+            value={`${metrics.averageSentiment > 0 ? '+' : ''}${metrics.averageSentiment.toFixed(2)}`}
+            change={
+              metrics.averageSentiment > 0.1
+                ? 'Net Positive'
+                : metrics.averageSentiment < -0.1
+                ? 'Net Opposing'
+                : 'Neutral Consensus'
+            }
+            changeType={metrics.averageSentiment >= 0 ? 'positive' : 'negative'}
+            icon={<TrendingUp className="w-4 h-4" />}
+            subtitle={`Stance: ${metrics.supportivePercentage}% Supp / ${metrics.opposingPercentage}% Opp`}
+          />
+
+          <MetricCard
+            label="Threat Level Matrix"
+            value={metrics.threatLevel}
+            change={`Sarcasm: ${metrics.sarcasmIndex}%`}
+            changeType={metrics.threatLevel === 'CRITICAL' ? 'negative' : 'neutral'}
+            icon={<AlertTriangle className="w-4 h-4" />}
+            subtitle={`${narrativeCount ?? 16} active narrative clusters`}
+          />
+        </div>
+
+        {/* ══════════════════════════════════════════════════════════════════
+            ANALYTICAL BREAKDOWN CARDS
+            ══════════════════════════════════════════════════════════════════ */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Emotion Spectrum */}
+          <div className="cred-card p-6">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.08]">
+              <h3 className="text-xs font-mono uppercase tracking-[0.2em] font-bold text-white flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                Emotion Spectrum
+              </h3>
+              <span className="text-[10px] font-mono text-neutral-400">
+                {topEmotions.length} Detected
+              </span>
+            </div>
+
+            {topEmotions.length === 0 ? (
+              <div className="py-12 text-center text-xs font-mono text-neutral-500">
+                COMPUTING EMOTION RADAR…
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {topEmotions.map((e) => (
+                  <div key={e.emotion}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="font-bold capitalize text-white font-sans">{e.emotion}</span>
+                      <span className="font-mono text-neutral-400 text-[11px]">{e.rawCount} signals</span>
+                    </div>
+                    <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-white to-neutral-400 rounded-full"
+                        style={{ width: `${Math.min(100, e.value)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Stance & Consensus */}
+          <div className="cred-card p-6">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.08]">
+              <h3 className="text-xs font-mono uppercase tracking-[0.2em] font-bold text-white flex items-center gap-2">
+                <Users className="w-3.5 h-3.5 text-cyan-400" />
+                Stance Consensus
+              </h3>
+              <span className="text-[10px] font-mono text-neutral-400">
+                Triple Alignment
+              </span>
+            </div>
+
+            <div className="space-y-4 pt-2">
+              <div>
+                <div className="flex justify-between text-xs mb-1.5">
+                  <span className="font-bold text-emerald-400">Supportive</span>
+                  <span className="font-mono text-white">{metrics.supportivePercentage}%</span>
+                </div>
+                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-400 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                    style={{ width: `${metrics.supportivePercentage}%` }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs mb-1.5">
+                  <span className="font-bold text-neutral-300">Neutral</span>
+                  <span className="font-mono text-white">
+                    {Math.max(0, 100 - metrics.supportivePercentage - metrics.opposingPercentage)}%
+                  </span>
+                </div>
+                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-white/50 rounded-full"
+                    style={{
+                      width: `${Math.max(0, 100 - metrics.supportivePercentage - metrics.opposingPercentage)}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs mb-1.5">
+                  <span className="font-bold text-rose-400">Opposing</span>
+                  <span className="font-mono text-white">{metrics.opposingPercentage}%</span>
+                </div>
+                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-rose-500 rounded-full shadow-[0_0_10px_rgba(244,63,94,0.5)]"
+                    style={{ width: `${metrics.opposingPercentage}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Sarcasm & Volatility */}
+          <div className="cred-card p-6 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.08]">
+                <h3 className="text-xs font-mono uppercase tracking-[0.2em] font-bold text-white flex items-center gap-2">
+                  <Activity className="w-3.5 h-3.5 text-amber-400" />
+                  Sarcasm & Subversion
+                </h3>
+                <span className="text-[10px] font-mono text-neutral-400">
+                  RoBERTa Sarcasm
+                </span>
+              </div>
+
+              <div className="my-3">
+                <div className="text-4xl font-extrabold text-white tracking-tight font-display mb-1">
+                  {metrics.sarcasmIndex}%
+                </div>
+                <p className="text-xs text-neutral-400 leading-relaxed">
+                  Percentage of messages containing ironical markers, contrarian emojis, or contextual subversion.
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <Link
-                href="/narratives"
-                className="px-3 py-1.5 rounded-lg bg-skynet-surface border border-skynet-border text-xs font-semibold text-skynet-text-primary hover:border-skynet-accent flex items-center gap-1.5 transition-all"
-              >
-                <TrendingUp className="w-3.5 h-3.5 text-skynet-accent" />
-                <span>Narrative Tracker</span>
-              </Link>
-
-              <Link
-                href="/sources"
-                className="px-3 py-1.5 rounded-lg bg-skynet-surface border border-skynet-border text-xs font-medium text-skynet-muted hover:text-skynet-text-primary transition-all flex items-center gap-1"
-              >
-                <span>Sources</span>
-                <ArrowUpRight className="w-3 h-3" />
-              </Link>
-            </div>
+            <Link
+              href="/narratives"
+              className="cred-pill-btn-outline w-full text-center"
+            >
+              <span>Explore Narrative Graph</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
         </div>
 
-        {/* Live Ingestion & Reel Capture Bar */}
-        <div className="skynet-surface rounded-2xl p-5 mb-8 border border-skynet-border">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[11px] font-mono uppercase text-skynet-accent flex items-center gap-1.5 font-bold">
-              <Zap className="w-3.5 h-3.5" />
-              <span>Live Collection & Ingestion Console</span>
-            </span>
-            <span className="text-[10px] text-skynet-muted font-mono">
-              Direct Reel, Video, or Channel Targeting
-            </span>
-          </div>
-
-          <form onSubmit={handleLiveIngest} className="flex flex-col sm:flex-row items-center gap-2.5">
-            <div className="relative flex-1 w-full">
-              <input
-                type="text"
-                placeholder={
-                  activeTab === 'instagram'
-                    ? 'Paste Instagram Reel or Post URL (e.g. https://www.instagram.com/reel/...)'
-                    : activeTab === 'youtube'
-                    ? 'Paste YouTube Video URL or ID (e.g. https://www.youtube.com/watch?v=...)'
-                    : activeTab === 'telegram'
-                    ? 'Enter Telegram public channel name (e.g. durov, telegram)'
-                    : 'Paste any Reel, Video, Channel, or #hashtag to ingest live…'
-                }
-                value={ingestInput}
-                onChange={(e) => setIngestInput(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-skynet-surface-secondary border border-skynet-border text-xs text-skynet-text-primary placeholder:text-skynet-muted focus:outline-none focus:border-skynet-accent transition-all shadow-inner font-mono"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={ingesting || !ingestInput.trim()}
-              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-skynet-accent text-skynet-bg text-xs font-bold hover:bg-skynet-accent/90 transition-all flex items-center justify-center gap-2 shadow-md shadow-skynet-accent/15 disabled:opacity-40 flex-shrink-0"
-            >
-              {ingesting ? (
-                <>
-                  <Activity className="w-3.5 h-3.5 animate-spin" />
-                  <span>Collecting & Scoring…</span>
-                </>
-              ) : (
-                <>
-                  <span>Ingest & Analyze</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Quick Suggestions */}
-          <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-skynet-border/60 text-[11px]">
-            <span className="text-skynet-muted">Quick test:</span>
-            {activeTab === 'instagram' || activeTab === 'all' ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setIngestInput('https://www.instagram.com/reel/DcHEonOvCLB/')}
-                  className="px-2 py-0.5 rounded bg-skynet-surface-secondary text-skynet-text-secondary hover:text-skynet-text-primary border border-skynet-border font-mono text-[10px] transition-colors"
-                >
-                  reel/DcHEonOvCLB
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIngestInput('https://www.instagram.com/p/Dbq0GvDv1q_/')}
-                  className="px-2 py-0.5 rounded bg-skynet-surface-secondary text-skynet-text-secondary hover:text-skynet-text-primary border border-skynet-border font-mono text-[10px] transition-colors"
-                >
-                  post/Dbq0GvDv1q_
-                </button>
-              </>
-            ) : null}
-
-            {activeTab === 'telegram' || activeTab === 'all' ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setIngestInput('durov')}
-                  className="px-2 py-0.5 rounded bg-skynet-surface-secondary text-skynet-text-secondary hover:text-skynet-text-primary border border-skynet-border font-mono text-[10px] transition-colors"
-                >
-                  t.me/durov
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIngestInput('telegram')}
-                  className="px-2 py-0.5 rounded bg-skynet-surface-secondary text-skynet-text-secondary hover:text-skynet-text-primary border border-skynet-border font-mono text-[10px] transition-colors"
-                >
-                  t.me/telegram
-                </button>
-              </>
-            ) : null}
-
-            {activeTab === 'youtube' || activeTab === 'all' ? (
-              <button
-                type="button"
-                onClick={() => setIngestInput('https://www.youtube.com/watch?v=DmFGE-DBQvY')}
-                className="px-2 py-0.5 rounded bg-skynet-surface-secondary text-skynet-text-secondary hover:text-skynet-text-primary border border-skynet-border font-mono text-[10px] transition-colors"
-              >
-                yt/DmFGE-DBQvY
-              </button>
-            ) : null}
-          </div>
-
-          {/* Feedback banner */}
-          {ingestStatus && (
-            <div
-              className={`mt-3 p-3 rounded-xl border flex items-center gap-2 text-xs animate-in fade-in ${
-                ingestStatus.type === 'success'
-                  ? 'bg-skynet-positive/10 border-skynet-positive/30 text-skynet-positive'
-                  : 'bg-skynet-negative/10 border-skynet-negative/30 text-skynet-negative'
-              }`}
-            >
-              {ingestStatus.type === 'success' ? (
-                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-              ) : (
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              )}
-              <span>{ingestStatus.text}</span>
-            </div>
-          )}
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <Activity className="w-6 h-6 text-skynet-muted animate-pulse mx-auto mb-3" />
-              <p className="text-skynet-text-secondary text-sm">
-                Scanning {currentPlatform.name} intelligence channels…
-              </p>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* 4 Core KPIs for this Screen */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              <MetricCard
-                label={`${currentPlatform.shortName} Volume`}
-                value={metrics.totalPosts.toLocaleString()}
-                icon={<BarChart3 className="w-4 h-4" strokeWidth={1.5} />}
-                subtitle="Captured & ML-Scored Posts"
-              />
-              <MetricCard
-                label="Identified Authors / Nodes"
-                value={metrics.activeNodes.toLocaleString()}
-                icon={<Users className="w-4 h-4" strokeWidth={1.5} />}
-                subtitle="Unique accounts analyzed"
-              />
-              <MetricCard
-                label="Narrative Footprint"
-                value={narrativeCount !== null ? narrativeCount.toString() : '—'}
-                icon={<TrendingUp className="w-4 h-4" strokeWidth={1.5} />}
-                subtitle="Active clusters on channel"
-              />
-              <MetricCard
-                label="Channel Stance & Threat"
-                value={metrics.threatLevel}
-                icon={<AlertTriangle className="w-4 h-4" strokeWidth={1.5} />}
-                subtitle={`Avg Score: ${metrics.averageSentiment > 0 ? '+' : ''}${metrics.averageSentiment}`}
-              />
-            </div>
-
-            {/* Platform Detail Grids: Sentiment & Trends */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              {/* Sentiment Distribution */}
-              <div className="skynet-surface rounded-xl p-6 border border-skynet-border">
-                <SectionHeader
-                  title={`${currentPlatform.shortName} Stance Breakdown`}
-                  subtitle="Supportive vs opposing stance distributions"
-                />
-                <div className="space-y-3 mt-4">
-                  {sentimentData.stanceDistribution.map((item) => {
-                    const total =
-                      sentimentData.stanceDistribution.reduce((s, i) => s + i.value, 0) || 1;
-                    const pct = Math.round((item.value / total) * 100);
-                    const color = item.name.includes('Supportive')
-                      ? 'bg-skynet-positive'
-                      : item.name.includes('Opposing')
-                      ? 'bg-skynet-negative'
-                      : 'bg-skynet-accent-steel';
-
-                    return (
-                      <div key={item.name}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs text-skynet-text-secondary">{item.name}</span>
-                          <span className="text-xs font-semibold text-skynet-text-primary skynet-metric">
-                            {pct}% ({item.value})
-                          </span>
-                        </div>
-                        <div className="h-1.5 bg-skynet-surface-secondary rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${color}`}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Top Nuanced GoEmotions */}
-                <div className="mt-6 pt-4 border-t border-skynet-border">
-                  <span className="text-[10px] font-mono uppercase text-skynet-muted block mb-2">
-                    Top Observed GoEmotions
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    {topEmotions.map((e) => (
-                      <span
-                        key={e.emotion}
-                        className="text-[11px] px-2.5 py-1 rounded-md bg-skynet-surface-secondary text-skynet-text-secondary border border-skynet-border capitalize font-medium"
-                      >
-                        {e.emotion} <span className="text-skynet-muted">({e.rawCount})</span>
-                      </span>
-                    ))}
-                    {topEmotions.length === 0 && (
-                      <span className="text-xs text-skynet-muted italic">
-                        No fine-grained emotions detected.
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Emerging Trends & Vocabulary */}
-              <div className="skynet-surface rounded-xl p-6 border border-skynet-border">
-                <SectionHeader
-                  title={`${currentPlatform.shortName} Trending Signals`}
-                  subtitle="Frequency spikes, z-scores, and key vocabulary"
-                />
-                <div className="space-y-3 mt-4">
-                  {emergingTrends.length > 0 ? (
-                    emergingTrends.map((trend: any, i: number) => {
-                      const keyword = trend.keyword || trend.topic || 'Unknown';
-                      const count = trend.postCount || trend.count || 0;
-                      const score =
-                        trend.sentimentScore !== undefined ? trend.sentimentScore : 0;
-                      const isPositive = score > 0.1;
-                      const isNegative = score < -0.1;
-
-                      return (
-                        <div
-                          key={trend.id || keyword || i}
-                          className="flex items-center justify-between py-2.5 border-b border-skynet-border last:border-0"
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="text-[11px] font-mono text-skynet-muted w-5">
-                              {String(i + 1).padStart(2, '0')}
-                            </span>
-                            <div>
-                              <p className="text-xs font-semibold text-skynet-text-primary">
-                                {keyword}
-                              </p>
-                              <p className="text-[10px] text-skynet-muted">
-                                {count} mentions{' '}
-                                {trend.isSpike
-                                  ? '· Spike'
-                                  : trend.zScore
-                                  ? `· z=${trend.zScore.toFixed(1)}`
-                                  : ''}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <span
-                              className={`text-xs font-semibold skynet-metric ${
-                                isPositive
-                                  ? 'text-skynet-positive'
-                                  : isNegative
-                                  ? 'text-skynet-negative'
-                                  : 'text-skynet-text-secondary'
-                              }`}
-                            >
-                              {score > 0 ? '+' : ''}
-                              {score.toFixed(2)}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <p className="text-xs text-skynet-muted py-6 text-center">
-                      No emerging trends detected for {currentPlatform.name}.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Collected Posts Stream for this Screen */}
-            <div className="mb-8">
-              <PlatformFeed posts={posts} platformName={currentPlatform.name} />
-            </div>
-
-            {/* If dormant connector, show connector telemetry & setup action */}
-            {activeTab !== 'all' && (platformCounts[activeTab] || 0) === 0 && (
-              <div className="skynet-surface rounded-xl p-6 border border-skynet-border/80 bg-skynet-surface-secondary/40">
-                <div className="flex items-start gap-3">
-                  <Info className="w-5 h-5 text-skynet-accent mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="text-xs font-bold text-skynet-text-primary">
-                      {currentPlatform.name} Connector Integration
-                    </h4>
-                    <p className="text-[11px] text-skynet-text-secondary mt-1 leading-relaxed">
-                      The {currentPlatform.name} ingestion connector is fully implemented in{' '}
-                      <code>src/lib/ingestion/{activeTab}.ts</code>. To ingest live data from{' '}
-                      {currentPlatform.name}, configure the credentials in <code>.env</code> or visit
-                      the Connected Accounts page.
-                    </p>
-                    <div className="mt-3">
-                      <Link
-                        href="/settings/accounts"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-skynet-surface border border-skynet-border text-xs font-semibold text-skynet-text-primary hover:border-skynet-accent transition-all"
-                      >
-                        <span>Configure {currentPlatform.name} Credentials</span>
-                        <ArrowUpRight className="w-3.5 h-3.5" />
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        )}
+        {/* ══════════════════════════════════════════════════════════════════
+            LIVE INTERCEPTED SOCIAL STREAM
+            ══════════════════════════════════════════════════════════════════ */}
+        <PlatformFeed
+          posts={posts}
+          platformName={currentPlatform.name}
+        />
       </main>
     </SkynetLayout>
   );

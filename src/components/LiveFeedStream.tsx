@@ -162,15 +162,15 @@ export const LiveFeedStream: React.FC<LiveFeedStreamProps> = ({
               <div className="flex items-center gap-3 text-slate-400">
                 <span className="flex items-center gap-1">
                   <Heart className="w-3 h-3 text-rose-500" />
-                  {post.likes}
+                  {post.likes ?? "n/a"}
                 </span>
                 <span className="flex items-center gap-1">
                   <Repeat2 className="w-3 h-3 text-cyan-400" />
-                  {post.shares}
+                  {post.shares ?? "n/a"}
                 </span>
                 <span className="flex items-center gap-1">
                   <MessageSquare className="w-3 h-3 text-purple-400" />
-                  {post.replies}
+                  {post.replies ?? "n/a"}
                 </span>
               </div>
             </div>

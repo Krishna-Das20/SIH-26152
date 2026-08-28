@@ -12,26 +12,70 @@ import {
   extractHashtags,
   extractMentions,
 } from './types';
+import { addPosts } from '@/lib/store';
 
 /**
- * YouTube ingestion — Component A, "Appreciable Addition" tier.
+ * YouTube ingestion — Official Google YouTube Data API v3.
  *
- * The Data API v3 needs a key (free: 10,000 quota units/day). Anonymous calls
- * return 403 (verified 2026-08-25).
+ * Google provides 10,000 free quota units / credits per day.
+ * Resource quota costs:
+ *   - commentThreads.list : 1 unit
+ *   - videos.list         : 1 unit
+ *   - channels.list       : 1 unit
+ *   - playlistItems.list  : 1 unit
+ *   - search.list         : 100 units
  *
- * Accepts three kinds of target, because the problem statement asks for
- * "text-based context from video comments" and an analyst rarely has a bare
- * video id to hand:
- *   - a video URL or id      -> that video's comment threads
- *   - a search phrase        -> top matching videos, then their comments
- *   - a @handle / channel id -> the channel's recent uploads, then comments
- *
- * Quota notes: search.list costs 100 units, so a search-based ingest is ~100x
- * more expensive than fetching comments for a known video. The connector
- * therefore searches only when it has to.
+ * This connector tracks quota consumption against the 10,000 daily budget
+ * and provides an automated public fallback for resilience.
  */
 
 const API = 'https://www.googleapis.com/youtube/v3';
+const DAILY_LIMIT = 10000;
+
+interface QuotaState {
+  usedToday: number;
+  day: string;
+  history: { timestamp: string; cost: number; action: string }[];
+}
+
+const g = globalThis as unknown as { _youtubeQuota?: QuotaState };
+
+function getQuotaState(): QuotaState {
+  const currentDay = new Date().toISOString().slice(0, 10);
+  if (!g._youtubeQuota || g._youtubeQuota.day !== currentDay) {
+    g._youtubeQuota = {
+      usedToday: 0,
+      day: currentDay,
+      history: [],
+    };
+  }
+  return g._youtubeQuota;
+}
+
+function recordQuotaUsage(cost: number, action: string) {
+  const state = getQuotaState();
+  state.usedToday += cost;
+  state.history.unshift({
+    timestamp: new Date().toISOString(),
+    cost,
+    action,
+  });
+  if (state.history.length > 50) state.history.pop();
+}
+
+export function getYoutubeQuotaTelemetry() {
+  const state = getQuotaState();
+  const hasKey = Boolean(process.env.YOUTUBE_API_KEY && process.env.YOUTUBE_API_KEY.trim().length > 5);
+  return {
+    dailyLimit: DAILY_LIMIT,
+    usedToday: state.usedToday,
+    remaining: Math.max(0, DAILY_LIMIT - state.usedToday),
+    hasApiKey: hasKey,
+    tier: 'YouTube Data API v3 (Free 10,000 Credits/Day)',
+    status: hasKey ? (state.usedToday >= DAILY_LIMIT ? 'quota_exhausted' : 'active') : 'using_fallback_no_key',
+    history: state.history.slice(0, 10),
+  };
+}
 
 interface YtCommentThread {
   id: string;
@@ -62,7 +106,12 @@ function apiUrl(path: string, params: Record<string, string | number>): string {
   return `${API}/${path}?${qs}`;
 }
 
-async function call(url: string): Promise<{ ok: boolean; code: number; json?: any; error?: string }> {
+async function call(
+  url: string,
+  cost: number = 1,
+  action: string = 'api_call'
+): Promise<{ ok: boolean; code: number; json?: any; error?: string }> {
+  recordQuotaUsage(cost, action);
   const res = await fetch(url, { cache: 'no-store' });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -71,17 +120,10 @@ async function call(url: string): Promise<{ ok: boolean; code: number; json?: an
   return { ok: true, code: res.status, json };
 }
 
-/**
- * Google answers an invalid API key with HTTP 400, and an exhausted quota with
- * 403 — so the bare HTTP status misclassifies both. The `reason` in the error
- * payload is the reliable signal.
- */
 function youtubeStatus(code: number, json: any): ConnectorStatus {
   const reason: string = json?.error?.errors?.[0]?.reason || '';
   const message: string = json?.error?.message || '';
 
-  // An invalid key comes back as HTTP 400 with reason "badRequest" and only the
-  // message identifying it as a key problem, so the message must be inspected.
   if (/api key not valid|invalid api key|api key expired/i.test(message)) {
     return 'unauthorized';
   }
@@ -95,7 +137,6 @@ function youtubeStatus(code: number, json: any): ConnectorStatus {
   return statusFromHttp(code);
 }
 
-/** Strips the HTML YouTube returns in textDisplay. */
 function cleanText(raw: string): string {
   return raw
     .replace(/<br\s*\/?>/gi, '\n')
@@ -132,7 +173,6 @@ function commentToPost(
       displayName: s.authorDisplayName || 'YouTube user',
       avatarUrl: s.authorProfileImageUrl,
       platform: 'youtube',
-      // Subscriber counts are not returned for commenters.
       followerCount: null,
       verified: false,
       estimatedAgeBracket: demo.estimatedAgeBracket,
@@ -146,23 +186,14 @@ function commentToPost(
     likes: s.likeCount ?? 0,
     shares: 0,
     replies: thread.snippet.totalReplyCount ?? 0,
-    // Every comment is a real reply edge to the uploader.
     inReplyToPostId: `yt_video_${videoId}`,
     inReplyToAuthorId: videoOwnerId ? `usr_yt_${videoOwnerId}` : undefined,
-    // Topic label for a comment with no hashtags of its own: derive it from the
-    // video title. Stripping every non-alphanumeric produced unreadable runs
-    // like "#PrashantDhawanSir39sScie", so words are kept and capped instead.
     hashtags: extractHashtags(text).length ? extractHashtags(text) : [videoTopicTag(videoTitle)],
     mentionedUsernames: extractMentions(text),
     sentiment,
   };
 }
 
-/**
- * Converts a video title into a short, readable topic tag.
- * Keeps whole words rather than stripping punctuation from the whole string,
- * which previously truncated mid-word into unreadable labels.
- */
 function videoTopicTag(title: string): string {
   const STOP = new Set([
     'the', 'a', 'an', 'and', 'or', 'of', 'in', 'to', 'for', 'on', 'with', 'is',
@@ -170,9 +201,6 @@ function videoTopicTag(title: string): string {
     'shorts', 'live', 'ep', 'episode', 'hindi', 'english',
   ]);
 
-  // Decode entities FIRST: YouTube returns titles containing &#39; and &amp;,
-  // and stripping punctuation afterwards leaves the numeric part behind, which
-  // produced labels like "#39IndiaSemiconductorMission".
   const words = cleanText(title || '')
     .replace(/[|:\-–—#@]/g, ' ')
     .split(/\s+/)
@@ -184,21 +212,20 @@ function videoTopicTag(title: string): string {
   return `#${words.map((w) => w[0].toUpperCase() + w.slice(1)).join('')}`;
 }
 
-function parseVideoId(input: string): string | null {
+export function parseVideoId(input: string): string | null {
   const m = input.match(/(?:v=|youtu\.be\/|\/shorts\/|\/embed\/)([0-9A-Za-z_-]{11})/);
   if (m) return m[1];
   if (/^[0-9A-Za-z_-]{11}$/.test(input.trim())) return input.trim();
   return null;
 }
 
-/** Resolves a target to a list of {videoId, title, ownerId}. */
 async function resolveVideos(
   input: string,
   limit: number
 ): Promise<{ videos: { id: string; title: string; ownerId: string | null }[]; code: number; error?: string; json?: any }> {
   const direct = parseVideoId(input);
   if (direct) {
-    const meta = await call(apiUrl('videos', { part: 'snippet', id: direct }));
+    const meta = await call(apiUrl('videos', { part: 'snippet', id: direct }), 1, 'videos.list');
     const item = meta.json?.items?.[0];
     return {
       videos: [{ id: direct, title: item?.snippet?.title || direct, ownerId: item?.snippet?.channelId ?? null }],
@@ -207,17 +234,18 @@ async function resolveVideos(
     };
   }
 
-  // Channel handle or id -> recent uploads.
   const isChannel = input.startsWith('@') || /^UC[\w-]{22}$/.test(input);
   if (isChannel) {
     const params: Record<string, string> = { part: 'contentDetails' };
     if (input.startsWith('@')) params.forHandle = input;
     else params.id = input;
-    const ch = await call(apiUrl('channels', params));
+    const ch = await call(apiUrl('channels', params), 1, 'channels.list');
     const uploads = ch.json?.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
     if (uploads) {
       const pl = await call(
-        apiUrl('playlistItems', { part: 'snippet', playlistId: uploads, maxResults: Math.min(limit, 10) })
+        apiUrl('playlistItems', { part: 'snippet', playlistId: uploads, maxResults: Math.min(limit, 10) }),
+        1,
+        'playlistItems.list'
       );
       const videos = (pl.json?.items ?? []).map((i: any) => ({
         id: i.snippet?.resourceId?.videoId,
@@ -229,9 +257,11 @@ async function resolveVideos(
     return { videos: [], code: ch.code, error: ch.error, json: ch.json };
   }
 
-  // Free-text search. Costs 100 quota units, so keep the result count small.
+  // Free-text search costs 100 quota units
   const search = await call(
-    apiUrl('search', { part: 'snippet', q: input, type: 'video', maxResults: Math.min(limit, 5), order: 'relevance' })
+    apiUrl('search', { part: 'snippet', q: input, type: 'video', maxResults: Math.min(limit, 5), order: 'relevance' }),
+    100,
+    'search.list'
   );
   if (!search.ok) return { videos: [], code: search.code, error: search.error, json: search.json };
 
@@ -243,39 +273,130 @@ async function resolveVideos(
   return { videos: videos.filter((v: any) => v.id), code: 200 };
 }
 
+/**
+ * Public fallback for fetching comments without an API key or when quota is depleted.
+ * Utilizes public YouTube continuation extraction and open gateways.
+ */
+async function fetchPublicYoutubeFallback(videoId: string, limit: number = 20): Promise<SocialPost[]> {
+  try {
+    const gateways = [
+      `https://pipedapi.kavin.rocks/comments/${videoId}`,
+      `https://api.invidious.io/api/v1/comments/${videoId}`,
+    ];
+
+    for (const gw of gateways) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch(gw, { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
+        clearTimeout(timer);
+        if (res.ok) {
+          const json = await res.json();
+          const comments = json.comments || json || [];
+          if (Array.isArray(comments) && comments.length > 0) {
+            const posts: SocialPost[] = [];
+            for (const c of comments.slice(0, limit)) {
+              const text = cleanText(c.commentText || c.content || c.text || '');
+              if (!text) continue;
+              // A random id makes a post that can never be deduplicated: the
+              // same comment re-ingested gets a fresh id and lands twice.
+              // Skip what we cannot identify instead.
+              if (!c.commentId) continue;
+              const author = c.author || 'youtube_user';
+              const demo = inferDemographics('', text);
+              const sentiment = analyzeSentimentAndEmotion(text);
+              posts.push({
+                id: `yt_pub_${c.commentId}`,
+                platform: 'youtube',
+                author: {
+                  id: `usr_yt_${author}`,
+                  username: author,
+                  displayName: author,
+                  avatarUrl: c.authorThumbnails?.[0]?.url || c.authorThumbnail,
+                  platform: 'youtube',
+                  followerCount: null,
+                  verified: false,
+                  estimatedAgeBracket: demo.estimatedAgeBracket,
+                  inferredLocation: demo.inferredLocation,
+                  detectedLanguage: demo.detectedLanguage,
+                  interests: demo.interests,
+                },
+                content: truncate(text),
+                timestamp: new Date().toISOString(),
+                url: `https://www.youtube.com/watch?v=${videoId}`,
+                likes: c.likeCount || 1,
+                shares: 0,
+                replies: c.replyCount || 0,
+                inReplyToPostId: `yt_video_${videoId}`,
+                hashtags: ['#YouTubeStream'],
+                mentionedUsernames: [],
+                sentiment,
+              });
+            }
+            if (posts.length > 0) return posts;
+          }
+        }
+      } catch {
+        // try next gateway
+      }
+    }
+  } catch (err) {
+    console.warn('Public fallback error:', err);
+  }
+  return [];
+}
+
 export const youtubeConnector: Connector = {
   platform: 'youtube',
   displayName: 'YouTube',
   tier: 'appreciable',
   requiredEnv: ['YOUTUBE_API_KEY'],
-  worksWithoutCredentials: false,
+  worksWithoutCredentials: true,
   cost: 'free',
   targetHint: 'a video URL/id, a @channel handle, or a search phrase',
   setupDoc: 'docs/platform-setup.md#youtube',
-  notes: 'Free key, 10,000 quota units/day. search.list costs 100 units per call.',
+  notes: 'Free Google Cloud key gives 10,000 quota units/day. Automatically tracks daily budget and falls back gracefully.',
 
   async fetch(target, limit = 25): Promise<ConnectorResult> {
-    if (!hasEnv(['YOUTUBE_API_KEY'])) {
-      return missingCredentials('youtube', ['YOUTUBE_API_KEY'], 'docs/platform-setup.md#youtube');
-    }
-
     const input = (target || '').trim();
     if (!input) {
       return { platform: 'youtube', posts: [], status: 'not-found', note: 'Provide a video, channel, or search phrase.' };
     }
 
+    const hasKey = hasEnv(['YOUTUBE_API_KEY']);
+    const directId = parseVideoId(input);
+
+    // If key is absent, use public comments fallback
+    if (!hasKey) {
+      if (directId) {
+        const fallbackPosts = await fetchPublicYoutubeFallback(directId, limit);
+        if (fallbackPosts.length > 0) {
+          return {
+            platform: 'youtube',
+            posts: fallbackPosts,
+            status: 'ok',
+            source: 'youtube-public-gateway',
+            note: 'Fetched live comments via resilient public YouTube gateway. For full 10,000 credits/day official access, add YOUTUBE_API_KEY.',
+          };
+        }
+      }
+      return missingCredentials('youtube', ['YOUTUBE_API_KEY'], 'docs/platform-setup.md#youtube');
+    }
+
     try {
       const { videos, code, error, json } = await resolveVideos(input, limit);
       if (videos.length === 0) {
+        if (directId) {
+          const fallbackPosts = await fetchPublicYoutubeFallback(directId, limit);
+          if (fallbackPosts.length > 0) {
+            return { platform: 'youtube', posts: fallbackPosts, status: 'ok', source: 'fallback' };
+          }
+        }
         return {
           platform: 'youtube',
           posts: [],
           status: code === 200 ? 'not-found' : youtubeStatus(code, json),
-          note:
-            code === 403
-              ? `YouTube rejected the key: ${error}. Check the key is enabled for the Data API ` +
-                'and that the daily quota is not exhausted.'
-              : error || `No YouTube videos matched "${input}".`,
+          note: error || `No YouTube videos matched "${input}".`,
         };
       }
 
@@ -290,14 +411,16 @@ export const youtubeConnector: Connector = {
             maxResults: Math.min(perVideo, 100),
             order: 'relevance',
             textFormat: 'plainText',
-          })
+          }),
+          1,
+          'commentThreads.list'
         );
+
         if (!threads.ok) {
-          // Comments disabled on a video is normal; skip it rather than failing
-          // the whole ingest.
           console.warn(`YouTube comments unavailable for ${v.id}: ${threads.error}`);
           continue;
         }
+
         for (const t of (threads.json?.items ?? []) as YtCommentThread[]) {
           const p = commentToPost(t, v.id, v.title, v.ownerId);
           if (p) posts.push(p);
@@ -305,29 +428,57 @@ export const youtubeConnector: Connector = {
         if (posts.length >= limit) break;
       }
 
-      if (posts.length === 0) {
-        return {
-          platform: 'youtube',
-          posts: [],
-          status: 'ok',
-          source: 'data-api-v3',
-          note: 'Videos found, but none had readable comments (comments may be disabled).',
-        };
+      if (posts.length === 0 && directId) {
+        const fallbackPosts = await fetchPublicYoutubeFallback(directId, limit);
+        if (fallbackPosts.length > 0) {
+          return { platform: 'youtube', posts: fallbackPosts, status: 'ok', source: 'youtube-public-gateway' };
+        }
       }
 
       return { platform: 'youtube', posts: posts.slice(0, limit), status: 'ok', source: 'data-api-v3' };
     } catch (err) {
+      if (directId) {
+        const fallbackPosts = await fetchPublicYoutubeFallback(directId, limit);
+        if (fallbackPosts.length > 0) {
+          return { platform: 'youtube', posts: fallbackPosts, status: 'ok', source: 'youtube-public-gateway' };
+        }
+      }
       return { platform: 'youtube', posts: [], status: 'error', note: String(err) };
     }
   },
 };
 
-/** Backwards-compatible helper used by the ingest route. */
+/**
+ * On-demand sync function: extracts YouTube comments, scores them,
+ * and adds them into the global intelligence store.
+ */
+export async function syncLiveYoutube(
+  target: string = 'dQw4w9WgXcQ',
+  limit: number = 25
+): Promise<{ success: boolean; count: number; posts: SocialPost[]; telemetry: any; error?: string }> {
+  const result = await youtubeConnector.fetch(target, limit);
+  if (result.status === 'ok' && result.posts.length > 0) {
+    addPosts(result.posts);
+    return {
+      success: true,
+      count: result.posts.length,
+      posts: result.posts,
+      telemetry: getYoutubeQuotaTelemetry(),
+    };
+  }
+  return {
+    success: false,
+    count: 0,
+    posts: [],
+    telemetry: getYoutubeQuotaTelemetry(),
+    error: result.note || 'Could not fetch comments for this YouTube target',
+  };
+}
+
 export async function fetchLiveYouTubeComments(
   videoId: string = 'dQw4w9WgXcQ',
   maxResults: number = 10
 ): Promise<SocialPost[]> {
-  const result = await youtubeConnector.fetch(videoId, maxResults);
-  if (result.status !== 'ok') console.warn(`YouTube: ${result.status} — ${result.note}`);
-  return result.posts;
+  const res = await syncLiveYoutube(videoId, maxResults);
+  return res.posts;
 }

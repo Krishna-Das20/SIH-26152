@@ -4,7 +4,7 @@ import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: "SKYNET • Social Intelligence Platform",
-  description: "AI-Driven Social Media Analytics — Narrative Mutation, Sentiment, Trends, Network Topology",
+  description: "SKYNET Autonomous Social Media Intelligence & Narrative Tracking Platform — SIH-26152",
 };
 
 export default function RootLayout({
@@ -14,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className="antialiased bg-skynet-bg text-skynet-text-primary min-h-screen">
+      <body className="antialiased bg-nexus-bg text-nexus-text-primary min-h-screen">
         <Providers>{children}</Providers>
       </body>
     </html>

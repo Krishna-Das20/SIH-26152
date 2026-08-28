@@ -1,0 +1,22 @@
+name: nexus-intelligence-bridge
+version: 0.0.1
+description: Real-time Reddit stream integration for NEXUS Social Intelligence Platform
+permissions:
+  http:
+    enable: true
+    domains:
+      - "localhost"
+      - "127.0.0.1"
+  reddit:
+    enable: true
+    asUser: true
+triggers:
+  onPostSubmit: true
+  onCommentSubmit: true
+menu:
+  - context: post
+    location: post
+    label: "Sync to NEXUS Intelligence"
+  - context: subreddit
+    location: subreddit
+    label: "Stream Subreddit to NEXUS"

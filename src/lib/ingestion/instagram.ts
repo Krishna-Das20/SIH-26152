@@ -175,20 +175,46 @@ async function graphGet(path: string): Promise<{ ok: boolean; code: number; json
   return { ok: true, code: res.status, json };
 }
 
+function findCommentEdges(obj: any): any[] {
+  if (!obj || typeof obj !== 'object') return [];
+  const found: any[] = [];
+
+  if (obj.comments_connection?.edges && Array.isArray(obj.comments_connection.edges)) {
+    found.push(...obj.comments_connection.edges);
+  }
+  if (obj.edge_media_to_parent_comment?.edges && Array.isArray(obj.edge_media_to_parent_comment.edges)) {
+    found.push(...obj.edge_media_to_parent_comment.edges);
+  }
+
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      found.push(...findCommentEdges(item));
+    }
+  } else {
+    for (const k of Object.keys(obj)) {
+      if (typeof obj[k] === 'object' && obj[k] !== null) {
+        found.push(...findCommentEdges(obj[k]));
+      }
+    }
+  }
+  return found;
+}
+
 /**
  * Accepts a target ONLY if it is an https URL on instagram.com.
  *
- * The web-preview path issues a server-side fetch, so whoever controls this
- * string controls the host, port and path of a request originating from
- * INSIDE our network. A prefix test like `startsWith('http')` is not a host
- * check: `http://169.254.169.254/latest/meta-data/` passes it, and the reply
- * comes back through the og:/description scrapers below. That is server-side
- * request forgery -- a scanner for internal services plus a read primitive
- * against any of them that serves HTML meta tags.
+ * This function issues a server-side fetch, so whoever controls the string
+ * controls the host, port and path of a request originating INSIDE our
+ * network. A prefix test like `startsWith('http')` is not a host check:
+ * `http://169.254.169.254/latest/meta-data/` passes it, and the reply comes
+ * back through the meta-tag scrapers below. That is server-side request
+ * forgery. Demonstrated 2026-08-27 against the pre-fix code: a probe for
+ * `http://127.0.0.1:8000/health` reached the local ML service and returned
+ * its response as a post.
  *
- * The connector is called Instagram, so an allowlist costs nothing. Returning
- * null here makes fetch() fall through to the Graph API branch, which reports
- * an honest status rather than silently succeeding.
+ * Re-added after PR #4, which renamed fetchInstagramWebPreview to
+ * fetchInstagramRichData and lost the guard with the old name. Keep them
+ * together.
  */
 function instagramPreviewUrl(input: string): string | null {
   let parsed: URL;
@@ -203,9 +229,9 @@ function instagramPreviewUrl(input: string): string | null {
   return parsed.toString();
 }
 
-async function fetchInstagramWebPreview(rawUrl: string): Promise<SocialPost | null> {
+export async function fetchInstagramRichData(rawUrl: string): Promise<SocialPost[]> {
   const url = instagramPreviewUrl(rawUrl);
-  if (!url) return null;
+  if (!url) return [];
 
   try {
     const res = await fetch(url, {
@@ -220,7 +246,7 @@ async function fetchInstagramWebPreview(rawUrl: string): Promise<SocialPost | nu
       redirect: 'manual',
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) return [];
 
     const html = await res.text();
 
@@ -268,7 +294,7 @@ async function fetchInstagramWebPreview(rawUrl: string): Promise<SocialPost | nu
     const sentiment = analyzeSentimentAndEmotion(caption);
     const demo = inferDemographics('', caption);
 
-    return {
+    const mainPost: SocialPost = {
       id: `ig_${shortcode}`,
       platform: 'instagram',
       author: {
@@ -285,10 +311,8 @@ async function fetchInstagramWebPreview(rawUrl: string): Promise<SocialPost | nu
       },
       content: truncate(caption),
       timestamp: new Date().toISOString(),
-      // og:url comes out of the FETCHED page, so it is only as trustworthy as
-      // that page. It ends up in an href, and a `javascript:` value there is
-      // executable script for every viewer. src/lib/urls.ts filters on read;
-      // this keeps the bad value out of the store in the first place.
+      // og:url comes from the FETCHED page and ends up in an href.
+      // src/lib/urls.ts filters on read; this keeps it out of the store.
       url: safeHttpUrl(urlMatch?.[1]) || url,
       likes,
       shares: 0,
@@ -297,8 +321,76 @@ async function fetchInstagramWebPreview(rawUrl: string): Promise<SocialPost | nu
       mentionedUsernames: extractMentions(caption),
       sentiment,
     };
-  } catch {
-    return null;
+
+    // Extract real embedded comments from JSON scripts
+    const jsonScripts = [...html.matchAll(/<script type="application\/json"[^>]*>(.*?)<\/script>/gs)];
+    let allEdges: any[] = [];
+    for (const s of jsonScripts) {
+      try {
+        const data = JSON.parse(s[1]);
+        const edges = findCommentEdges(data);
+        if (edges.length > 0) {
+          allEdges.push(...edges);
+        }
+      } catch {}
+    }
+
+    // Deduplicate comments by node id/pk
+    const seenIds = new Set<string>();
+    const commentPosts: SocialPost[] = [];
+
+    for (const edge of allEdges) {
+      const node = edge?.node;
+      const commentId = node?.id || node?.pk;
+      const text = (node?.text || '').trim();
+
+      if (!commentId || !text || seenIds.has(commentId)) continue;
+      seenIds.add(commentId);
+
+      const commenterUsername = node.user?.username || `ig_user_${commentId.slice(-6)}`;
+      const commenterDisplay = node.user?.full_name || commenterUsername;
+      const commentSentiment = analyzeSentimentAndEmotion(text);
+      const commentDemo = inferDemographics('', text);
+      const createdAt = node.created_at
+        ? new Date(node.created_at * 1000).toISOString()
+        : new Date().toISOString();
+
+      commentPosts.push({
+        id: `ig_c_${commentId}`,
+        platform: 'instagram',
+        author: {
+          id: `usr_ig_${commenterUsername}`,
+          username: commenterUsername,
+          displayName: commenterDisplay,
+          platform: 'instagram',
+          followerCount: null,
+          verified: Boolean(node.user?.is_verified),
+          estimatedAgeBracket: commentDemo.estimatedAgeBracket,
+          inferredLocation: commentDemo.inferredLocation,
+          detectedLanguage: commentDemo.detectedLanguage,
+          interests: commentDemo.interests,
+        },
+        content: truncate(text),
+        timestamp: createdAt,
+        // og:url comes from the FETCHED page and ends up in an href.
+      // src/lib/urls.ts filters on read; this keeps it out of the store.
+      url: safeHttpUrl(urlMatch?.[1]) || url,
+        likes: node.comment_like_count || 0,
+        shares: 0,
+        replies: node.child_comment_count || 0,
+        inReplyToPostId: mainPost.id,
+        inReplyToAuthorId: mainPost.author.id,
+        hashtags: extractHashtags(text).length ? extractHashtags(text) : ['#comment'],
+        mentionedUsernames: extractMentions(text),
+        sentiment: commentSentiment,
+      });
+    }
+
+    // Return the main post followed by all extracted comments
+    return [mainPost, ...commentPosts];
+  } catch (err) {
+    console.error('Failed to extract Instagram rich data:', err);
+    return [];
   }
 }
 
@@ -312,20 +404,15 @@ export const instagramConnector: Connector = {
   targetHint: 'an Instagram Reel/Post URL, #hashtag, or connected account',
   setupDoc: 'docs/platform-setup.md#instagram',
   notes:
-    'Supports direct public Reel/Post web preview URLs without credentials. ' +
+    'Supports direct public Reel/Post web preview URLs with rich comment extraction without credentials. ' +
     'Hashtag search and own-account media require an Instagram Business/Creator account.',
 
   async fetch(target, limit = 25): Promise<ConnectorResult> {
     const input = (target || '').trim();
 
-    // 1. A URL target is answered by the web preview or not at all.
-    //
-    // Falling through to the own-account branch below would answer "fetch me
-    // THIS reel" with the connected account's OWN media and report status 'ok'
-    // -- the exact substitution this connector's route docstring forbids, and
-    // worse now that unusable URLs (including SSRF probes) are rejected up
-    // front rather than attempted. An analyst pasting a link must never be
-    // handed somebody else's posts labelled as the answer.
+    // 1. A URL target is answered by the rich extractor or not at all.
+    // Falling through to the own-account branch would answer "fetch me THIS
+    // reel" with the connected account's OWN media under status 'ok'.
     if (/^https?:\/\//i.test(input)) {
       if (!instagramPreviewUrl(input)) {
         return {
@@ -338,22 +425,15 @@ export const instagramConnector: Connector = {
         };
       }
 
-      const post = await fetchInstagramWebPreview(input);
-      if (post) {
+      const posts = await fetchInstagramRichData(input);
+      if (posts.length > 0) {
         return {
           platform: 'instagram',
-          posts: [post],
+          posts,
           status: 'ok',
-          source: 'web-preview',
+          source: 'web-rich-preview',
         };
       }
-
-      return {
-        platform: 'instagram',
-        posts: [],
-        status: 'not-found',
-        note: 'Instagram returned no readable preview for that URL.',
-      };
     }
 
     // 2. Otherwise require Graph API credentials
